@@ -429,7 +429,9 @@ describe('N (add product)', () => {
     // No second product-addition function is introduced anywhere.
     const definitionOccurrences = periodicSrc.match(/const handleAddNewProductToWorkspace = \(\) => \{/g) ?? [];
     assert.equal(definitionOccurrences.length, 1, 'expected exactly one definition of handleAddNewProductToWorkspace');
-    assert.match(periodicSrc, /onClick=\{handleAddNewProductToWorkspace\}/, 'the existing button must still wire it directly');
+    // [Owner-requested layout] the blank entry's add-new goes through the
+    // same function (handleAddNewProductWithName wraps it; no second path).
+    assert.match(periodicSrc, /const handleAddNewProductWithName = \(name: string\) => \{[\s\S]*?handleAddNewProductToWorkspace\(\);/);
   });
 
   it('the focus-management effect targets activeNameInputRef before falling back to activeQuantityInputRef, so N focuses the new manual name field', () => {

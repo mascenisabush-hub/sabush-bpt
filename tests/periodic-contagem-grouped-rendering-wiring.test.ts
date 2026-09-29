@@ -39,13 +39,14 @@ describe('Data pipeline — groups built before filtering, reusing Step 1/2 modu
     );
   });
 
-  it('sorting feeds group-derived representative values into the SAME, unmodified sortByValidatedMode — no new sort implementation', () => {
-    const fnMatch = componentSource.match(/const sortedProductDisplayGroups = useMemo\(\s*\n\s*\(\) =>\s*\n\s*sortByValidatedMode\([\s\S]*?\n    \[filteredProductDisplayGroups, validatedSortMode\]\s*\n  \);/);
-    assert.ok(fnMatch, 'expected sortedProductDisplayGroups to exist');
-    assert.match(fnMatch![0], /\(group\) => group\.sortRepresentative\.entrySequence/);
-    assert.match(fnMatch![0], /\(group\) => group\.sortRepresentative\.firstWriteAt/);
-    assert.match(fnMatch![0], /\(group\) => group\.sortRepresentative\.originalOrderIndex/);
-    assert.doesNotMatch(fnMatch![0], /group\.key\.length|indexOf|findIndex/, 'must never sort by array index');
+  it('[Owner-requested layout, 2026-09-29] sorting uses group-derived values only — "por validar" first, then each group\'s latest entrySequence, newest first — never array position', () => {
+    const start = componentSource.indexOf('const sortedProductDisplayGroups = useMemo(');
+    assert.notEqual(start, -1, 'expected sortedProductDisplayGroups to exist');
+    const body = componentSource.slice(start, componentSource.indexOf('\n  );', start));
+    assert.match(body, /a\.allValidated \? 1 : 0/);
+    assert.match(body, /latestEntrySequence\(b\) - latestEntrySequence\(a\)/);
+    assert.match(componentSource, /group\.members\.reduce\(\(max, member\) => Math\.max\(max, member\.entrySequence \?\? -1\), -1\)/);
+    assert.doesNotMatch(body, /group\.key\.length|indexOf|findIndex/, 'must never sort by array index');
   });
 
   it('workspace-active filtering uses activeWorkspaceRowIdentity (Step 1\'s own precise snapshot), matching by stable member identity, never by name', () => {

@@ -4143,6 +4143,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (
       row &&
       (row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice) &&
+      !suppressRemoveConfirmRef.current &&
       !window.confirm('Remover esta porção? Os dados já preenchidos (quantidade, preços) serão perdidos.')
     ) {
       return;
@@ -5141,6 +5142,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   const isWorkspaceActive = activeWorkspaceKey !== null || activeNewManualRowIndex !== null;
 
+  // [Owner-requested layout, 2026-09-29] The left side is purely an
+  // "editing space": a blank entry (type a product name → pick it or add it
+  // new) or the product being edited. It can be closed with ✕ to finish the
+  // count; the counted list then sits centred. Opening any product (from the
+  // list or the entry search) re-opens it. After Validar the product joins
+  // the list and a fresh blank entry takes focus immediately.
+  const [editingSpaceOpen, setEditingSpaceOpen] = useState(true);
+  const [entryPickerQuery, setEntryPickerQuery] = useState('');
+  const entryPickerInputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (isWorkspaceActive) setEditingSpaceOpen(true);
+  }, [isWorkspaceActive]);
+  const wasWorkspaceActiveRef = useRef(isWorkspaceActive);
+  useEffect(() => {
+    if (wasWorkspaceActiveRef.current && !isWorkspaceActive && editingSpaceOpen) {
+      setEntryPickerQuery('');
+      setTimeout(() => entryPickerInputRef.current?.focus(), 0);
+    }
+    wasWorkspaceActiveRef.current = isWorkspaceActive;
+  }, [isWorkspaceActive, editingSpaceOpen]);
+  // Set only while ✕ discards a new product: its own confirmation already
+  // covered every portion, so handleRemoveManualRow must not ask again.
+  const suppressRemoveConfirmRef = useRef(false);
+
   // [Decision 60 §13.A item 10 — Working-Position Recovery] Persists
   // ONLY the navigation pointer (which product's workspace was open),
   // never a value — the authoritative quantity/state remains
@@ -5266,6 +5291,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     rowKey: string;
     productName: string;
     productId?: string;
+    catalogProductId?: string;
+    manualRowIndex?: number;
     reason: string | null;
   };
   const pendingValidationEntries: PendingValidationEntry[] = [
@@ -5275,6 +5302,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         rowKey: `catalog:${productId}`,
         productName: row.productName,
         productId,
+        catalogProductId: productId,
         reason: validateWorkingRowForSave(row) ?? duplicatePortionMessageFor(row, `catalog:${productId}`),
       })),
     ...manualRows
@@ -5284,6 +5312,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         rowKey: row.sourceRowKey ?? `manual:${index}`,
         productName: row.productName,
         productId: row.productId,
+        manualRowIndex: index,
         reason: validateWorkingRowForSave(row) ?? duplicatePortionMessageFor(row, manualRowKey(row, index)),
       })),
   ];
@@ -6063,30 +6092,33 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // representative values (the minimum member value per criterion)
   // into the SAME, completely unmodified sortByValidatedMode already
   // used above — no new sort implementation, no sort by array index.
+  // [Owner-requested layout, 2026-09-29] The right-hand list shows the
+  // products of THIS count: validated ones and ones started but not yet
+  // validated ("por validar"). Untouched catalog products are not listed —
+  // they are found by typing in the editing space's blank entry. Order is
+  // fixed: "por validar" first (they need attention), then validated
+  // products by when they were validated, most recent first.
+  const isGroupStarted = (group: ProductDisplayGroup): boolean =>
+    group.members.some(
+      (member) =>
+        member.validated || member.quantity.trim() !== '' || (member.kind === 'manual' && group.displayName.trim() !== '')
+    );
+  const latestEntrySequence = (group: ProductDisplayGroup): number =>
+    group.members.reduce((max, member) => Math.max(max, member.entrySequence ?? -1), -1);
   const sortedProductDisplayGroups = useMemo(
     () =>
-      sortByValidatedMode(
-        filteredProductDisplayGroups,
-        (group) => group.displayName,
-        (group) => group.displayAggregateValue,
-        validatedSortMode,
-        (group) => group.sortRepresentative.entrySequence,
-        (group) => group.sortRepresentative.firstWriteAt,
-        (group) => group.sortRepresentative.originalOrderIndex
-      ),
-    [filteredProductDisplayGroups, validatedSortMode]
+      filteredProductDisplayGroups.filter(isGroupStarted).sort((a, b) => {
+        const pendingA = a.allValidated ? 1 : 0;
+        const pendingB = b.allValidated ? 1 : 0;
+        if (pendingA !== pendingB) return pendingA - pendingB;
+        const bySequence = latestEntrySequence(b) - latestEntrySequence(a);
+        if (bySequence !== 0) return bySequence;
+        return a.displayName.trim().toLowerCase().localeCompare(b.displayName.trim().toLowerCase());
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredProductDisplayGroups]
   );
 
-  // [Integration Point 3, Step 3] The active workspace's own precise
-  // membership snapshot (activeWorkspaceRowIdentity, Step 1) is the
-  // exact, already-correct source of truth for "which rows are
-  // actually in the open workspace right now" — a group is the active
-  // one if ANY of its members appears in that snapshot, checked by
-  // stable identity (catalog id / manual array index at read time,
-  // the same identity the snapshot itself was built from), never by
-  // name. This avoids needing a second, separately-maintained
-  // "active group key" concept that could drift from the workspace's
-  // own real membership.
   const visibleProductDisplayGroups = useMemo(
     () =>
       sortedProductDisplayGroups.filter((group) => {
@@ -6099,6 +6131,80 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       }),
     [sortedProductDisplayGroups, isWorkspaceActive, activeWorkspaceRowIdentity]
   );
+
+  // Opens a product exactly as a click on it in the list does (conflict →
+  // conflict panel; fully validated → Editar; partly validated → reopen all
+  // portions; otherwise open). Shared by the list and the entry search.
+  const activateProductGroup = (group: ProductDisplayGroup) => {
+    if (isWorkspaceActive) return;
+    const representative = group.members[0];
+    if (!representative) return;
+    if (group.anyConflicted) {
+      scrollToConflictPanel();
+      return;
+    }
+    if (group.allValidated) {
+      if (representative.kind === 'catalog' && representative.catalogProductId) {
+        handleEditCatalogRow(representative.catalogProductId);
+      } else if (representative.kind === 'manual' && representative.manualRowIndex !== null) {
+        handleEditManualRow(representative.manualRowIndex);
+      }
+      return;
+    }
+    const explicitProductId = group.key.startsWith('id:') ? group.key.slice(3) : undefined;
+    if (group.members.some((m) => m.validated)) {
+      reopenExistingProductForEditing(representative.activationKey, explicitProductId);
+      return;
+    }
+    handleSelectExistingProductForWorkspace(representative.activationKey, explicitProductId);
+  };
+
+  // Blank entry → new product with the typed name.
+  const handleAddNewProductWithName = (name: string) => {
+    const newIndex = manualRowsRef.current.length;
+    handleAddNewProductToWorkspace();
+    if (name.trim()) updateManualRow(newIndex, { productName: name.trim() });
+    setEntryPickerQuery('');
+  };
+
+  // ✕ on the editing space. Blank entry → close the editing space. A NEW
+  // product being entered → delete it (asking first when anything was
+  // typed). An existing product → close it without changes (Voltar); its
+  // counted data is never deleted by ✕ (use the portion's bin for that).
+  const handleCloseEditingSpace = async () => {
+    if (!isWorkspaceActive) {
+      setEditingSpaceOpen(false);
+      return;
+    }
+    if (activeNewManualRowIndex === null) {
+      handleLeaveWorkspaceUnchanged();
+      return;
+    }
+    const rows = activeWorkspaceRowIdentity.manualIndices
+      .map((i) => manualRowsRef.current[i])
+      .filter((row): row is StockCountWorkingRow => row !== undefined);
+    const hasData = rows.some(
+      (row) => row.productName.trim() || row.quantity.trim() || row.sellingPrice.trim() || row.costPrice.trim()
+    );
+    if (hasData && !window.confirm('Apagar este produto? O que escreveu nele será apagado.')) return;
+    suppressRemoveConfirmRef.current = true;
+    try {
+      for (const row of rows) {
+        const idx = manualRowsRef.current.findIndex(
+          (candidate) => candidate === row || (!!row.sourceRowKey && candidate.sourceRowKey === row.sourceRowKey)
+        );
+        if (idx >= 0) await handleRemoveManualRow(idx);
+      }
+    } finally {
+      suppressRemoveConfirmRef.current = false;
+    }
+    setActiveWorkspaceKey(null);
+    setActiveNewManualRowIndex(null);
+    setActiveWorkspaceRowIdentity({ catalogIds: [], manualIndices: [] });
+    setReopenedExistingProductKey(null);
+    setReopenedValidatedCatalogRowIds(null);
+    setReopenedValidatedManualRowIndices(null);
+  };
 
   // Single click handler for the unified list: routes to whichever
   // EXISTING function already implements the correct behavior for this
@@ -9512,55 +9618,41 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               becomes true) and the left column has real form content to
               show, the two-column split re-appears exactly as before,
               unchanged. */}
-          <div className={`grid grid-cols-1 ${isWorkspaceActive ? 'lg:grid-cols-2' : ''} gap-6 items-start`}>
+          <div className={`grid grid-cols-1 ${editingSpaceOpen ? 'lg:grid-cols-2' : ''} gap-6 items-start`}>
+          {editingSpaceOpen && (
           <div className="space-y-6">
-          {/* [Owner decision, 2026-09-29] Always-visible list of products
-              started but not validated: not in the live total, not in the
-              count, each with the exact thing Validar would complain
-              about (or "Pronto" when only the click is missing). */}
-          {pendingValidationEntries.length > 0 && (
-            <div id="contagem-pending-validation" className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
-              <div className="flex items-start gap-2.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-[2px]" strokeWidth={2.25} aria-hidden="true" />
-                <div className="min-w-0">
-                  <p className="text-[14px] font-semibold text-amber-900">
-                    Produtos por validar ({pendingValidationEntries.length})
-                  </p>
-                  <p className="text-[12px] text-amber-800 leading-relaxed">
-                    Ainda não entram no total nem na contagem. Abra cada produto, corrija o que falta e clique em Validar.
-                    O que já escreveu está guardado neste dispositivo.
-                  </p>
-                </div>
-              </div>
-              <ul className="divide-y divide-amber-100 rounded-xl bg-white border border-amber-100 max-h-72 overflow-y-auto">
-                {pendingValidationEntries.map((entry) => {
-                  const openKey = productKeyFor(entry.productName);
-                  return (
-                    <li key={entry.rowKey} className="flex items-center gap-3 px-3 py-2.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-semibold text-[#111827] truncate">{entry.productName.trim() || '(sem nome)'}</p>
-                        <p className={`text-[12px] leading-snug ${entry.reason ? 'text-rose-700' : 'text-emerald-700'}`}>
-                          {entry.reason ?? 'Pronto — falta apenas clicar em Validar.'}
-                        </p>
-                      </div>
-                      {openKey && !isWorkspaceActive && (
-                        <button
-                          type="button"
-                          onClick={() => handleSelectExistingProductForWorkspace(openKey, entry.productId)}
-                          className="shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#0B1F3A] bg-[#F6EFD9] hover:bg-[#EFE3BF] transition-colors"
-                        >
-                          Abrir
-                        </button>
-                      )}
-                      {openKey && isWorkspaceActive && activeWorkspaceProductKey === openKey && (
-                        <span className="shrink-0 text-[11px] font-semibold text-gray-500">Aberto</span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
+          {/* [Owner-requested layout] Editing-space header — ✕ closes a
+              blank entry, deletes a NEW product being entered (asks first
+              if anything was typed), or closes an existing product
+              without changes. */}
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[13px] font-bold text-[#0B1F3A] uppercase tracking-wide">
+              {isWorkspaceActive ? (activeNewManualRowIndex !== null ? 'Novo produto' : 'A editar produto') : 'Nova entrada'}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void handleCloseEditingSpace();
+              }}
+              aria-label={
+                !isWorkspaceActive
+                  ? 'Fechar espaço de edição'
+                  : activeNewManualRowIndex !== null
+                    ? 'Apagar este produto novo'
+                    : 'Fechar este produto sem alterações'
+              }
+              title={
+                !isWorkspaceActive
+                  ? 'Fechar espaço de edição'
+                  : activeNewManualRowIndex !== null
+                    ? 'Apagar este produto novo'
+                    : 'Fechar este produto sem alterações'
+              }
+              className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-rose-600 hover:bg-rose-50 border border-[#E5E7EB] transition-colors duration-150"
+            >
+              <X className="w-4 h-4" strokeWidth={2.5} />
+            </button>
+          </div>
           {/* [Owner-requested — single unified product list] The
               separate compact picker table that used to live here is
               removed — selecting an existing product (validated or
@@ -9593,17 +9685,75 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   <span className="truncate">Continuar de onde ficou: {lastWorkspaceEntry.productName}</span>
                 </button>
               )}
-              <p className="text-[13px] text-gray-500 italic">
-                Escolha um produto na lista à direita para começar a contar, ou adicione um novo abaixo.
-              </p>
-              <button
-                type="button"
-                onClick={handleAddNewProductToWorkspace}
-                className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[13px] transition-all duration-150 flex items-center justify-center gap-2 group"
-              >
-                <Plus className="w-3.5 h-3.5 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
-                <span>Adicionar produto que não está no catálogo</span>
-              </button>
+              {/* [Owner-requested layout] Blank entry: type the product's
+                  name, pick it from the catalog (or this count), or add it
+                  as new. Enter opens the single match, else adds new. */}
+              {(() => {
+                const query = entryPickerQuery.trim();
+                const matches = query ? filterGroupsBySearch(productDisplayGroups, query).slice(0, 8) : [];
+                const exact = matches.some((g) => g.displayName.trim().toLowerCase() === query.toLowerCase());
+                return (
+                  <div className="rounded-2xl border border-[#E5E7EB] bg-white p-3.5 space-y-2.5">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" strokeWidth={2.25} />
+                      <input
+                        ref={entryPickerInputRef}
+                        type="text"
+                        value={entryPickerQuery}
+                        onChange={(e) => setEntryPickerQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          if (matches.length === 1) activateProductGroup(matches[0]);
+                          else if (query && !exact) handleAddNewProductWithName(query);
+                        }}
+                        data-enter-validate="off"
+                        placeholder="Escreva o nome do produto a contar…"
+                        className={`${fieldClass} pl-8`}
+                        autoFocus
+                      />
+                    </div>
+                    {matches.length > 0 && (
+                      <ul className="rounded-xl border border-[#F0EEE4] divide-y divide-[#F0EEE4] max-h-64 overflow-y-auto">
+                        {matches.map((group) => (
+                          <li key={group.key}>
+                            <button
+                              type="button"
+                              onClick={() => activateProductGroup(group)}
+                              className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-[#D4AF37]/[0.06] transition-colors"
+                            >
+                              <span className="text-[13px] font-semibold text-[#111827] truncate">{group.displayName}</span>
+                              <span
+                                className={`text-[11px] font-semibold shrink-0 ${
+                                  group.allValidated ? 'text-emerald-700' : isGroupStarted(group) ? 'text-amber-700' : 'text-gray-400'
+                                }`}
+                              >
+                                {group.allValidated ? 'Já contado — editar' : isGroupStarted(group) ? 'Por validar' : 'Contar'}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {query && !exact && (
+                      <button
+                        type="button"
+                        onClick={() => handleAddNewProductWithName(query)}
+                        className="w-full py-2 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-600 hover:text-[#0B1F3A] font-bold text-[13px] transition-all duration-150 flex items-center justify-center gap-2"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-[#D4AF37]" />
+                        <span className="truncate">Adicionar produto novo: “{query}”</span>
+                      </button>
+                    )}
+                    {!query && (
+                      <p className="text-[12px] text-gray-500">
+                        Escreva o nome para encontrar um produto do catálogo, ou para adicionar um novo. Quando terminar a
+                        contagem, feche este espaço (✕) e clique em “Rever e Confirmar”.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </>
           )}
 
@@ -10783,6 +10933,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               precisely when adding an independent second product must
               be impossible (§3). */}
           </div>
+          )}
           {/* [Implementation Authorization — Single-Product Workspace
               §10] RIGHT column (desktop) / BOTTOM (mobile) — the
               persistent counted-products list. `lg:sticky lg:top-4`
@@ -10803,7 +10954,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               are now also gated on `isWorkspaceActive`; idle, the list
               flows normally in the page and scrolls with everything
               else, exactly like it already does on mobile. */}
-          <div className={`space-y-6 ${isWorkspaceActive ? 'lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto' : ''}`}>
+          <div
+            className={`space-y-6 ${
+              editingSpaceOpen
+                ? 'lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto'
+                : 'w-full max-w-3xl mx-auto'
+            }`}
+          >
+          {!editingSpaceOpen && (
+            <button
+              type="button"
+              onClick={() => setEditingSpaceOpen(true)}
+              className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#D4AF37]/50 bg-[#D4AF37]/[0.05] hover:bg-[#D4AF37]/[0.10] text-[#0B1F3A] font-bold text-[13px] transition-colors duration-150 flex items-center justify-center gap-2"
+            >
+              <Plus className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <span>Contar produto</span>
+            </button>
+          )}
           {/* [Owner-requested — single unified product list] Replaces
               the old two-list split (compact unvalidated picker table +
               collapsible validated-only card list) with ONE always-
@@ -10824,10 +10991,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               workspace is excluded from this list entirely (it "comes
               solo to the editing zone"); every other product remains
               visible, disabled while a different product is active. */}
-          <div className="rounded-2xl border border-[#F0EEE4] bg-white px-4 py-3.5 space-y-2.5">
+          <div id="contagem-pending-validation" className="rounded-2xl border border-[#F0EEE4] bg-white px-4 py-3.5 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[13px] font-bold text-[#111827]">
-                Produtos
+                Produtos desta contagem
                 <span className="text-gray-500 font-normal ml-1.5">({visibleProductDisplayGroups.length})</span>
               </p>
               {/* [Owner-requested — PDF export before confirmation] */}
@@ -10865,52 +11032,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   properly associated with its own accessible name, exactly
                   like the control it replaces, without spending visible
                   space on an explanatory "Ordenar por" caption. */}
-              <label htmlFor="unified-list-sort-mode" className="sr-only">
-                Ordenar por
-              </label>
-              <select
-                id="unified-list-sort-mode"
-                value={validatedSortMode}
-                onChange={(e) => setValidatedSortMode(e.target.value as typeof validatedSortMode)}
-                className={`${fieldClass} sm:w-[180px] shrink-0`}
-              >
-                <option value="name-asc">Nome (A→Z)</option>
-                <option value="name-desc">Nome (Z→A)</option>
-                <option value="value-desc">Maior valor</option>
-                <option value="value-asc">Menor valor</option>
-                {/* [Entry-Order Sort Mode Amendment §6; Decision 60
-                    §5/§13.C; bug fix — Product Architect correction,
-                    5 September 2026: sorts by firstWriteAt (time of
-                    ENTRY, set once, never touched by a later
-                    correction), never lastWriteAt (time of last EDIT)
-                    and never entrySequence. 'entry-order' (below) is
-                    preserved unchanged, alongside these, per that
-                    amendment's own explicit "not removed, replaced, or
-                    redefined" requirement. */}
-                <option value="time-desc">Entrada mais recente</option>
-                <option value="time-asc">Entrada mais antiga</option>
-                <option value="entry-order">Ordem de registo</option>
-                {/* [Bug fix — Owner-reported, "products are disorganized,
-                    not the same order as when they were created," raised
-                    while verifying a SuperAdmin-authorized correction
-                    against the original Contagem's exported PDF] Only
-                    offered during an active correction/recovery — outside
-                    one, every row's `originalOrderIndex` is `undefined`
-                    by construction (correctionOriginalOrderRef is reset
-                    to `{}` the moment `pendingBusinessWorthCorrection` is
-                    absent), so this mode would silently collapse to
-                    alphabetical for a normal Contagem anyway; hiding the
-                    option there avoids offering a choice that can never
-                    do anything different. Deliberately labeled "Ordem da
-                    Contagem Original," never "time of entry" — this
-                    reproduces the STORED item order of the original
-                    record (the same order its own PDF export already
-                    prints, unchanged), not a genuine entry timestamp,
-                    which no historical StockCountItem has ever recorded. */}
-                {pendingBusinessWorthCorrection && (
-                  <option value="original-order">Ordem da Contagem Original</option>
-                )}
-              </select>
+              {/* [Owner-requested layout, 2026-09-29] Fixed order — most recent
+                  first — so no sort selector here (validatedSortMode still
+                  drives the review screen and the PDF). */}
             </div>
 
             {products.length === 0 && !productsError && unifiedListEntries.length === 0 && (
@@ -11299,6 +11423,33 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             <span>Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.</span>
                           </p>
                         )}
+                        {/* [Owner decision] A started-but-unvalidated product
+                            says it is not in the total and exactly what to
+                            change — the same checks Validar runs. */}
+                        {!group.allValidated &&
+                          (() => {
+                            const reasons = pendingValidationEntries
+                              .filter((entry) =>
+                                group.members.some(
+                                  (member) =>
+                                    (entry.catalogProductId !== undefined && member.catalogProductId === entry.catalogProductId) ||
+                                    (entry.manualRowIndex !== undefined && member.manualRowIndex === entry.manualRowIndex)
+                                )
+                              )
+                              .map((entry) => entry.reason);
+                            const firstProblem = reasons.find((reason) => reason !== null);
+                            return (
+                              <p className="col-span-2 sm:col-span-5 text-[11px] font-semibold leading-snug flex items-start gap-1 text-amber-700">
+                                <AlertTriangle className="w-3 h-3 shrink-0 mt-[1px]" strokeWidth={2.25} aria-hidden="true" />
+                                <span>
+                                  Por validar — não incluído no total.{' '}
+                                  <span className={firstProblem ? 'text-rose-700' : 'text-emerald-700'}>
+                                    {firstProblem ?? 'Pronto — falta apenas clicar em Validar.'}
+                                  </span>
+                                </span>
+                              </p>
+                            );
+                          })()}
                       </div>
                     );
                   })}

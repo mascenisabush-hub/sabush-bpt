@@ -59,5 +59,14 @@ first; leave/hide flush unchanged); Validar saves immediately; a failed Validar 
 + amber reminder in the sticky bar; "Rever e Confirmar" blocked while any remain, naming them. Reopened (Editar)
 products leave the total until re-validated. Test: tests/contagem-validar-counts-and-saves.test.ts.
 
+**Also (this session): Contagem layout (Owner-requested).** Left = editing space only (`editingSpaceOpen`): a
+blank entry (`entryPickerQuery` search over `productDisplayGroups` → `activateProductGroup`, or
+`handleAddNewProductWithName`) or the open product; header ✕ = `handleCloseEditingSpace` (blank → close space; NEW
+product → delete after one confirm, `suppressRemoveConfirmRef`; existing → Voltar). After Validar the blank entry
+refocuses. Right = started products only (`isGroupStarted`), "por validar" first then latest `entrySequence` desc,
+each unvalidated product shows its Validar reason; no sort selector (validatedSortMode still drives review/PDF).
+Closed space → list `max-w-3xl mx-auto` + "Contar produto". The left "Produtos por validar" panel was removed (now
+inside the list). Test: tests/contagem-editing-space-layout.test.ts.
+
 **Next:** optional mobile layout for the live total (bottom bar on phones; shrink main nav on scroll) — Owner has
 not decided.

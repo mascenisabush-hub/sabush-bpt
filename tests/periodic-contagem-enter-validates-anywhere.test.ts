@@ -28,7 +28,8 @@ test('leaves native Enter alone on buttons, links, dropdowns, rows and opted-out
   assert.match(enterBlock, /target\.closest\('\[role="button"\], \[data-enter-validate="off"\]'\)/);
   assert.match(enterBlock, /'checkbox', 'radio', 'file', 'date'/);
   // search, count label and existing-product lookup opt out
-  assert.equal((view.match(/\n\s*data-enter-validate="off"\n/g) ?? []).length, 3);
+  // + the editing space's blank-entry search (Enter opens/adds a product there).
+  assert.equal((view.match(/\n\s*data-enter-validate="off"\n/g) ?? []).length, 4);
 });
 
 test('shortcut reuses the same validation paths (single portion vs whole product) and Ctrl/Cmd advance', () => {

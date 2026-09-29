@@ -318,7 +318,7 @@ describe('Issue 2 — Periodic Contagem live Selling-Price readability', () => {
     // below by isolating everything before the unified list's own
     // section, unmodified by this change.
     const fullRowSpans = periodicSrc.match(/col-span-2 sm:col-span-5/g) ?? [];
-    assert.equal(fullRowSpans.length, 6, `Expected 6 full-row col-span-5 spans (4 original + 2 from the unified list's own warnings), found ${fullRowSpans.length}.`);
+    assert.equal(fullRowSpans.length, 7, `Expected 7 full-row col-span-5 spans (4 original + 3 from the unified list's own warnings, incl. "por validar"), found ${fullRowSpans.length}.`);
     const unifiedSectionStart = periodicSrc.indexOf('Owner-requested — single unified product list] Replaces');
     assert.notEqual(unifiedSectionStart, -1);
     const activeAreaSpans = periodicSrc.slice(0, unifiedSectionStart).match(/col-span-2 sm:col-span-5/g) ?? [];

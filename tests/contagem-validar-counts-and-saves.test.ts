@@ -53,9 +53,11 @@ test('2c. leaving/hiding the page still flushes unsaved rows (safety net unchang
 
 test('3. unvalidated products are always listed with what to change', () => {
   assert.match(view, /reason: validateWorkingRowForSave\(row\) \?\? duplicatePortionMessageFor\(row, `catalog:\$\{productId\}`\),/);
+  // [Owner-requested layout] shown inside the right-hand list, on each
+  // unvalidated product, instead of a separate panel.
   assert.match(view, /id="contagem-pending-validation"/);
-  assert.match(view, /Produtos por validar \(\{pendingValidationEntries\.length\}\)/);
-  assert.match(view, /\{entry\.reason \?\? 'Pronto — falta apenas clicar em Validar\.'\}/);
+  assert.match(view, /Por validar — não incluído no total\./);
+  assert.match(view, /\{firstProblem \?\? 'Pronto — falta apenas clicar em Validar\.'\}/);
   assert.match(view, /produtos por validar — não incluídos no total/);
 });
 

@@ -105,9 +105,10 @@ describe('C — A second independent product cannot be activated while one is al
   const idle = idleSection();
   const unifiedList = unifiedListSection();
 
-  it('the idle-state "add new product" action is gated on !isWorkspaceActive', () => {
+  it('the idle-state "add new product" action is gated on !isWorkspaceActive (blank entry → handleAddNewProductWithName → handleAddNewProductToWorkspace)', () => {
     assert.match(periodicSrc, /\{!isWorkspaceActive && \(/);
-    assert.match(idle, /handleAddNewProductToWorkspace/);
+    assert.match(idle, /handleAddNewProductWithName\(query\)/);
+    assert.match(periodicSrc, /const handleAddNewProductWithName = \(name: string\) => \{[\s\S]*?handleAddNewProductToWorkspace\(\);/);
   });
 
   it('the unified list itself is NOT gated on !isWorkspaceActive (it stays visible either way) — instead, every entry belonging to a DIFFERENT product than the active one is individually disabled, and the active product\'s own entries are excluded entirely', () => {
@@ -142,25 +143,24 @@ describe('C — A second independent product cannot be activated while one is al
 });
 
 describe('D — "Adicionar produto que não está no catálogo" is unavailable while a product is active', () => {
-  it('exactly one LIVE <span> button label exists — a second mention in an explanatory comment is expected and does not count', () => {
-    const spanMatches = periodicSrc.match(/<span>Adicionar produto que não está no catálogo<\/span>/g) ?? [];
-    assert.equal(spanMatches.length, 1, 'Expected exactly one live button label in the source.');
-    const totalMentions = (periodicSrc.match(/Adicionar produto que não está no catálogo/g) ?? []).length;
-    assert.equal(totalMentions, 2, 'Expected exactly two mentions total: one live button, one explanatory comment.');
+  it('[Owner-requested layout, 2026-09-29] the old "Adicionar produto que não está no catálogo" button is replaced by the blank entry\'s "Adicionar produto novo" — exactly one live add-new label', () => {
+    const live = periodicSrc.match(/<span className="truncate">Adicionar produto novo: “\{query\}”<\/span>/g) ?? [];
+    assert.equal(live.length, 1);
+    assert.doesNotMatch(periodicSrc, /<span>Adicionar produto que não está no catálogo<\/span>/);
   });
 
-  it('that one occurrence lives inside the idle-state section (gated on !isWorkspaceActive), not the workspace section', () => {
+  it('that add-new action lives inside the idle-state section (gated on !isWorkspaceActive), not the workspace section', () => {
     const idle = idleSection();
-    assert.match(idle, /<span>Adicionar produto que não está no catálogo<\/span>/);
+    assert.match(idle, /Adicionar produto novo: “\{query\}”/);
   });
 
-  it('its onClick is handleAddNewProductToWorkspace, not the raw handleAddManualRow directly', () => {
-    const idx = periodicSrc.indexOf('<span>Adicionar produto que não está no catálogo</span>');
+  it('its onClick goes through handleAddNewProductWithName (which calls handleAddNewProductToWorkspace), never the raw handleAddManualRow directly', () => {
+    const idx = periodicSrc.indexOf('Adicionar produto novo: “{query}”');
     const buttonOpenIdx = periodicSrc.lastIndexOf('<button', idx);
     assert.notEqual(buttonOpenIdx, -1);
     const buttonTag = periodicSrc.slice(buttonOpenIdx, idx);
-    assert.match(buttonTag, /onClick=\{handleAddNewProductToWorkspace\}/);
-    assert.doesNotMatch(buttonTag, /onClick=\{handleAddManualRow\}/);
+    assert.match(buttonTag, /onClick=\{\(\) => handleAddNewProductWithName\(query\)\}/);
+    assert.doesNotMatch(buttonTag, /handleAddManualRow/);
   });
 });
 
@@ -378,30 +378,22 @@ describe('J — Existing valuation, UnitRelationship, and autosave behavior are 
 });
 
 describe('K — Responsive layout (Authorization §10, extended for idle-state single column): desktop LEFT/RIGHT, mobile TOP/BOTTOM', () => {
-  it('the grid wrapper conditionally switches to a two-column split at the lg breakpoint only while a product is active — a single column at every breakpoint while idle', () => {
-    // [Layout — idle-state single column] `lg:grid-cols-2` is now
-    // conditional on `isWorkspaceActive` (template literal), rather
-    // than an unconditional literal class string — see this file's own
-    // comment at the grid wrapper for the full rationale (an idle left
-    // column with only the "add manual product" placeholder does not
-    // justify halving the product-list column's width).
-    assert.match(periodicSrc, /className=\{`grid grid-cols-1 \$\{isWorkspaceActive \? 'lg:grid-cols-2' : ''\} gap-6 items-start`\}/);
+  it('[Owner-requested layout] the grid is two columns at lg while the editing space is open, one column (list centred) when it is closed', () => {
+    assert.match(periodicSrc, /className=\{`grid grid-cols-1 \$\{editingSpaceOpen \? 'lg:grid-cols-2' : ''\} gap-6 items-start`\}/);
+    assert.match(periodicSrc, /\{editingSpaceOpen && \(\s*\n\s*<div className="space-y-6">/);
   });
 
-  it('the right column (persistent counted list) is sticky and independently scrollable on desktop only while a product is active — normal page flow while idle', () => {
-    assert.match(
-      periodicSrc,
-      /className=\{`space-y-6 \$\{isWorkspaceActive \? 'lg:sticky lg:top-4 lg:max-h-\[calc\(100vh-2rem\)\] lg:overflow-y-auto' : ''\}`\}/
-    );
+  it('the right column (the list) is sticky and independently scrollable on desktop beside the editing space, and centred at a fixed width when it is closed', () => {
+    assert.match(periodicSrc, /editingSpaceOpen\s*\?\s*'lg:sticky lg:top-4 lg:max-h-\[calc\(100vh-2rem\)\] lg:overflow-y-auto'\s*:\s*'w-full max-w-3xl mx-auto'/);
   });
 
-  it('the grid wrapper opens before the idle-state left column and its matching right-column div opens immediately before the unified product list', () => {
-    const gridStart = periodicSrc.indexOf("className={`grid grid-cols-1 ${isWorkspaceActive ? 'lg:grid-cols-2' : ''} gap-6 items-start`}");
+  it('the grid wrapper opens before the editing space and the right column opens before the unified product list', () => {
+    const gridStart = periodicSrc.indexOf("className={`grid grid-cols-1 ${editingSpaceOpen ? 'lg:grid-cols-2' : ''} gap-6 items-start`}");
     const idleStart = periodicSrc.indexOf('Owner-requested — single unified product list] The\n              separate compact picker table');
-    const rightColStart = periodicSrc.indexOf("className={`space-y-6 ${isWorkspaceActive ? 'lg:sticky lg:top-4");
+    const rightColStart = periodicSrc.indexOf("'lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto'");
     const unifiedListStart = periodicSrc.indexOf('Owner-requested — single unified product list] Replaces');
-    assert.ok(gridStart < idleStart, 'grid wrapper must open before the idle-state left column');
-    assert.ok(idleStart < rightColStart, 'left column must precede the right column opening');
+    assert.ok(gridStart !== -1 && gridStart < idleStart, 'grid wrapper must open before the editing space');
+    assert.ok(idleStart < rightColStart, 'editing space must precede the right column');
     assert.ok(rightColStart < unifiedListStart, 'right column must open before the unified product list itself');
   });
 
@@ -450,27 +442,20 @@ describe('L — Sorting (Authorization §8): four modes, using only existing dat
     assert.doesNotMatch(body, /entryTimestamp|validatedAt|createdAt/);
   });
 
-  it('sortedUnifiedListEntries derives from sortByValidatedMode, fed by unifiedListEntries (covering both catalog and manual, validated and not) and computing value as quantity*sellingPrice — the same formula each render block already used before sorting existed', () => {
-    // [Per-product grouping] groups are built from unifiedListEntries and
-    // sorted through the same sortByValidatedMode; value is quantity *
-    // sellingPrice per portion, summed in periodicContagemGroupedView.ts.
+  it('[Owner-requested layout] the list shows started products only, "por validar" first, then most recently validated first; value per product unchanged', () => {
     assert.match(periodicSrc, /buildProductDisplayGroups\(/);
     const sortedStart = periodicSrc.indexOf('const sortedProductDisplayGroups = useMemo(');
-    assert.notEqual(sortedStart, -1);
-    assert.match(periodicSrc.slice(sortedStart, sortedStart + 1500), /sortByValidatedMode|sortGroups/);
+    const body = periodicSrc.slice(sortedStart, sortedStart + 900);
+    assert.match(body, /filteredProductDisplayGroups\.filter\(isGroupStarted\)\.sort\(/);
+    assert.match(body, /if \(pendingA !== pendingB\) return pendingA - pendingB;/);
+    assert.match(body, /latestEntrySequence\(b\) - latestEntrySequence\(a\)/);
     const grouped = readFileSync(new URL('../apps/tenant/src/lib/periodicContagemGroupedView.ts', import.meta.url), 'utf-8');
     assert.match(grouped, /row\.sellingValue !== undefined\s*\?\s*row\.sellingValue \?\? 0\s*:\s*numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
   });
 
-  it('a single <select> control drives validatedSortMode with exactly the four required options — one shared control for the one shared list, rather than the old validated-only control', () => {
-    const start = periodicSrc.indexOf('id="unified-list-sort-mode"');
-    assert.notEqual(start, -1);
-    const selectBlock = periodicSrc.slice(start, periodicSrc.indexOf('</select>', start));
-    assert.match(selectBlock, /onChange=\{\(e\) => setValidatedSortMode\(e\.target\.value as typeof validatedSortMode\)\}/);
-    assert.match(selectBlock, /value="name-asc"/);
-    assert.match(selectBlock, /value="name-desc"/);
-    assert.match(selectBlock, /value="value-desc"/);
-    assert.match(selectBlock, /value="value-asc"/);
+  it('[Owner-requested layout] the list has a fixed order — no sort selector; validatedSortMode still drives the review screen and PDF', () => {
+    assert.doesNotMatch(periodicSrc, /id="unified-list-sort-mode"/);
+    assert.match(periodicSrc, /const \[validatedSortMode, setValidatedSortMode\] = useState</);
   });
 
   it('no catalog entry-time sort mode was invented — only the four authorized name/value modes exist anywhere in the sort logic', () => {
