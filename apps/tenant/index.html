@@ -37,6 +37,69 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- [Outdated-browser notice] Deliberately a classic, ES5-only inline
+         script with inline styles: on a browser too old for the app, the
+         module bundle and the Tailwind v4 stylesheet may not work at all,
+         so this must not depend on either. It checks exactly what the app
+         needs — Tailwind v4 CSS (color-mix: Chrome 111+/Safari 16.2+/
+         Firefox 113+; @property: Safari 16.4+/Firefox 128+),
+         crypto.randomUUID (row identities) and IndexedDB (Firestore cache,
+         local recovery) — and, if anything is missing, shows a clear
+         notice in Portuguese (with an English line) instead of a broken
+         page. "Continuar mesmo assim" dismisses it for the session, so a
+         wrong detection can never lock anyone out. -->
+    <script>
+      (function () {
+        function sabushBrowserSupported(w) {
+          try {
+            if (!w.CSS || typeof w.CSS.supports !== 'function') return false;
+            if (!w.CSS.supports('color', 'color-mix(in oklab, red, blue)')) return false;
+            if (!('CSSPropertyRule' in w)) return false;
+            if (!w.crypto || typeof w.crypto.randomUUID !== 'function') return false;
+            if (!w.indexedDB) return false;
+            return true;
+          } catch (e) {
+            return false;
+          }
+        }
+        window.__sabushBrowserSupported = sabushBrowserSupported;
+        if (sabushBrowserSupported(window)) return;
+        try {
+          if (window.sessionStorage && window.sessionStorage.getItem('sabush-old-browser-dismissed') === '1') return;
+        } catch (e) {}
+        function show() {
+          if (document.getElementById('sabush-old-browser')) return;
+          var box = document.createElement('div');
+          box.id = 'sabush-old-browser';
+          box.setAttribute('role', 'alertdialog');
+          box.setAttribute('aria-labelledby', 'sabush-old-browser-title');
+          box.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;background:#0B1F3A;color:#ffffff;font-family:Arial,Helvetica,sans-serif;display:block;overflow:auto;padding:24px;box-sizing:border-box;';
+          box.innerHTML =
+            '<div style="max-width:520px;margin:40px auto 0;text-align:left;line-height:1.5;">' +
+            '<div style="font-size:13px;letter-spacing:1px;color:#D4AF37;font-weight:bold;">SABUSH</div>' +
+            '<h1 id="sabush-old-browser-title" style="font-size:22px;margin:8px 0 12px;">O seu navegador est\u00e1 desatualizado</h1>' +
+            '<p style="margin:0 0 12px;font-size:15px;">Esta aplica\u00e7\u00e3o precisa de uma vers\u00e3o mais recente do navegador para funcionar corretamente. Para evitar erros ou perda de dados, atualize antes de continuar:</p>' +
+            '<ul style="margin:0 0 16px;padding-left:20px;font-size:15px;">' +
+            '<li style="margin-bottom:6px;"><b>iPhone / iPad:</b> Defini\u00e7\u00f5es \u2192 Geral \u2192 Atualiza\u00e7\u00e3o de software (iOS 16.4 ou mais recente).</li>' +
+            '<li style="margin-bottom:6px;"><b>Android:</b> atualize o Google Chrome na Play Store.</li>' +
+            '<li style="margin-bottom:6px;"><b>Computador:</b> use a vers\u00e3o mais recente do Chrome, Edge, Firefox ou Safari.</li>' +
+            '</ul>' +
+            '<p style="margin:0 0 20px;font-size:13px;color:#C9D1DC;">Your browser is out of date. Please update it (iOS 16.4+, or a current Chrome, Edge, Firefox or Safari) to use Sabush safely.</p>' +
+            '<button type="button" id="sabush-old-browser-continue" style="background:transparent;color:#ffffff;border:1px solid #ffffff;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer;">Continuar mesmo assim</button>' +
+            '</div>';
+          document.body.appendChild(box);
+          var btn = document.getElementById('sabush-old-browser-continue');
+          if (btn) {
+            btn.onclick = function () {
+              try { window.sessionStorage.setItem('sabush-old-browser-dismissed', '1'); } catch (e) {}
+              if (box.parentNode) box.parentNode.removeChild(box);
+            };
+          }
+        }
+        if (document.body) show();
+        else document.addEventListener('DOMContentLoaded', show);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

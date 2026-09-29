@@ -38,5 +38,10 @@ here. This file is short-term memory only.
 - Emulator suites (rules) need `storage.googleapis.com` (sandbox) or a machine with Java 21.
 - The GitHub PAT used in chat must be revoked.
 
+**Also (this session):** outdated-browser notice — ES5 inline script in `apps/tenant/index.html` (before the module
+bundle) checks color-mix, CSSPropertyRule (@property), crypto.randomUUID, IndexedDB; shows a PT/EN overlay with
+"Continuar mesmo assim" (session dismiss). Supported floor: iOS/Safari 16.4+, Chrome 111+, Firefox 128+ (Tailwind v4).
+Test: tests/outdated-browser-notice.test.ts runs the script against simulated browsers.
+
 **Next:** optional mobile layout for the live total (bottom bar on phones; shrink main nav on scroll) — Owner has
 not decided.
