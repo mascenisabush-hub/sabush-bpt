@@ -2575,7 +2575,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     draftInFlightSaveRef.current = savePromise;
   };
 
-  const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey) => {
+  // [Firestore usage reduction] While the operator is still typing, a
+  // row's server save now waits for ROW_SAVE_IDLE_DELAY_MS of inactivity
+  // instead of 800 ms, so typing a quantity, a price and a unit produces
+  // one write instead of several. No-data-loss is unchanged: (1) every
+  // edit is still written synchronously to the local recovery snapshot
+  // below, before any delay; (2) validating or removing a row saves
+  // immediately (ROW_SAVE_IMMEDIATE_DELAY_MS — see updateCatalogRow /
+  // updateManualRow); (3) flushPeriodicDraftNow still saves every pending
+  // row at once when the page is hidden, closed or left.
+  const ROW_SAVE_IDLE_DELAY_MS = 5000;
+  const ROW_SAVE_IMMEDIATE_DELAY_MS = 0;
+
+  type RowDraftSaveOptions = { delayMs?: number; content?: StockCountWorkingRow };
+  const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey, options?: RowDraftSaveOptions) => {
     // [Decision 41E §7/§13 — no incidental autosave while subscription-
     // blocked] Only ever called from an onChange handler inside the
     // editable form, which never renders while blocked — unreachable
@@ -2603,12 +2616,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         // parses as an index — correct for both a UUID-keyed row and
         // a not-yet-migrated legacy row still mid-transition, and
         // correct regardless of the row's current array position.
-        const currentContent = rowKey.startsWith('manual:')
+        // [Bug fix] updateCatalogRow passes the row it just built: reading
+        // `catalogRows` here sees the state from BEFORE this edit (same
+        // render), so the local backup lagged one edit behind.
+        const currentContent = options?.content ?? (rowKey.startsWith('manual:')
           ? manualRowsRef.current.find((row) => row.sourceRowKey === rowKey) ??
             manualRowsRef.current[Number(rowKey.slice('manual:'.length))]
           : rowKey.startsWith('catalog:')
             ? catalogRows[rowKey.slice('catalog:'.length)]
-            : undefined;
+            : undefined);
         if (currentContent) {
           const baseRev = periodicStockDraftItemsByKey[rowKey]?.rev ?? 0;
           writePeriodicRecoverySnapshot(activeBusinessId, rowKey, {
@@ -2688,7 +2704,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const timer = setTimeout(() => {
       rowDebounceTimersRef.current.delete(rowKey);
       performRowSaveAttempt(rowKey, protectionKey, generation, 1);
-    }, 800);
+    }, options?.delayMs ?? ROW_SAVE_IDLE_DELAY_MS);
     rowDebounceTimersRef.current.set(rowKey, timer);
   };
 
@@ -2907,7 +2923,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setCatalogRows(nextCatalogRows);
     // [Decision 39a] Keyed by this row's own stable productId — never
     // resets another catalog row's, or any manual row's, own timer.
-    scheduleRowDraftSave(`catalog:${productId}`);
+    scheduleRowDraftSave(`catalog:${productId}`, `catalog:${productId}`, {
+      content: nextCatalogRows[productId],
+      delayMs: 'validated' in fields || 'removed' in fields ? ROW_SAVE_IMMEDIATE_DELAY_MS : undefined,
+    });
   };
 
   // [Feature — per-row Save + confirm] One row's worth of the exact
@@ -3975,7 +3994,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // row (should not occur post-fix, kept defensive).
     scheduleRowDraftSave(
       nextManualRows[index].sourceRowKey ?? `manual:${index}`,
-      nextManualRows[index].sourceRowKey ?? `manual:${index}`
+      nextManualRows[index].sourceRowKey ?? `manual:${index}`,
+      { delayMs: 'validated' in fields ? ROW_SAVE_IMMEDIATE_DELAY_MS : undefined }
     );
   };
 
@@ -6720,6 +6740,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // Every existing row is checked, not only ones already counted —
     // an unresolved row with no quantity entered yet still represents
     // a problem the Owner must address before finalizing.
+    // [Firestore usage reduction] Rows still inside the (now longer) typing
+    // delay are sent to the server right away, so the server draft is
+    // current before finalization — the same flush the page uses when
+    // hidden/closed. The safety gate below is unchanged (pending rows
+    // count as 'saving'; errors/conflicts still block).
+    if (rowDebounceTimersRef.current.size > 0) flushPeriodicDraftNow();
     const unsafeRowEntries = [
       ...Object.entries(catalogRows).map(([productId]) => `catalog:${productId}`),
       ...manualRows.map((row, idx) => row.sourceRowKey ?? `manual:${idx}`),
@@ -7025,6 +7051,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       setError(unresolvedRecoveryEvidenceMessage(unresolvedEvidenceCount));
       return;
     }
+    // [Firestore usage reduction] Rows still inside the (now longer) typing
+    // delay are sent to the server right away, so the server draft is
+    // current before finalization — the same flush the page uses when
+    // hidden/closed. The safety gate below is unchanged (pending rows
+    // count as 'saving'; errors/conflicts still block).
+    if (rowDebounceTimersRef.current.size > 0) flushPeriodicDraftNow();
     const unsafeRowCount = [
       ...Object.entries(catalogRows).map(([productId]) => `catalog:${productId}`),
       ...manualRows.map((row, idx) => row.sourceRowKey ?? `manual:${idx}`),

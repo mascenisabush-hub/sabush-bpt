@@ -175,9 +175,9 @@ describe('scheduleRowDraftSave — synchronous recovery-write wiring', () => {
     'utf8'
   );
 
-  it('writePeriodicRecoverySnapshot is called synchronously, before the 800ms debounce timer is set', () => {
+  it('writePeriodicRecoverySnapshot is called synchronously, before the debounce timer (ROW_SAVE_IDLE_DELAY_MS) is set', () => {
     const fnMatch = componentSource.match(
-      /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey\) => \{[\s\S]*?\n  \};/
+      /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey, options\?: RowDraftSaveOptions\) => \{[\s\S]*?\n  \};/
     );
     assert.ok(fnMatch, 'expected scheduleRowDraftSave to exist');
     const body = fnMatch![0];
@@ -189,7 +189,7 @@ describe('scheduleRowDraftSave — synchronous recovery-write wiring', () => {
 
   it('is wrapped in try/catch — a storage failure must never block or corrupt the ordinary save path', () => {
     const fnMatch = componentSource.match(
-      /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey\) => \{[\s\S]*?\n  \};/
+      /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey, options\?: RowDraftSaveOptions\) => \{[\s\S]*?\n  \};/
     );
     const body = fnMatch![0];
     const tryIndex = body.indexOf('try {');
@@ -201,7 +201,7 @@ describe('scheduleRowDraftSave — synchronous recovery-write wiring', () => {
 
   it('resolves the row\'s current content by matching sourceRowKey against rowKey (correct for a genuinely new, UUID-keyed row), with a positional fallback for a not-yet-stamped legacy row, or catalogRows, by parsing the rowKey prefix', () => {
     const fnMatch = componentSource.match(
-      /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey\) => \{[\s\S]*?\n  \};/
+      /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey, options\?: RowDraftSaveOptions\) => \{[\s\S]*?\n  \};/
     );
     const body = fnMatch![0];
     assert.match(

@@ -166,7 +166,7 @@ describe('PeriodicStockCountView.tsx — Decision 41E write-path audit (§13)', 
   });
 
   it('test 7/8 — scheduleRowDraftSave (the debounce-scheduling entry point) guards on subscriptionBlocksNewRecords before doing anything else', () => {
-    const body = extractFunctionBody(periodicSrc, 'const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey) => {');
+    const body = extractFunctionBody(periodicSrc, 'const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey, options?: RowDraftSaveOptions) => {');
     const guardIdx = body.indexOf('if (subscriptionBlocksNewRecords) return;');
     const firstRealWorkIdx = body.indexOf('const existing = rowDebounceTimersRef.current.get(rowKey);');
     assert.notEqual(guardIdx, -1);

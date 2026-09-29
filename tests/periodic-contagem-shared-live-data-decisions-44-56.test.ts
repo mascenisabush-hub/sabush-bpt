@@ -828,9 +828,9 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
   });
 
   it('scheduling a row edit (scheduleRowDraftSave) marks that exact row dirty for catalog:/manual: keys only, keyed by protectionKey (a row\'s stable identity, defaulting to rowKey for every non-manual caller — unchanged behavior for those), valued by the actual save-target rowKey', () => {
-    const idx = viewSource.indexOf('const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey) => {');
+    const idx = viewSource.indexOf('const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey, options?: RowDraftSaveOptions) => {');
     assert.ok(idx >= 0, 'expected scheduleRowDraftSave to exist with the protectionKey parameter');
-    const body = viewSource.slice(idx, idx + 6000);
+    const body = viewSource.slice(idx, idx + 9000);
     assert.match(
       body,
       /if \(protectionKey\.startsWith\('catalog:'\) \|\| protectionKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[protectionKey\] = rowKey;\s*\n\s*bumpPersistenceStateTick\(\);\s*\n\s*\}/
@@ -981,9 +981,9 @@ describe('Bug fix — Area A dirty-flag lifecycle (already-CONFLICT rejection)',
   });
 
   it('4. a genuinely new local edit after resolution re-establishes the dirty flag through the entirely unmodified scheduleRowDraftSave path (now keyed by protectionKey, valued by rowKey — see the ref\'s own declaration comment)', () => {
-    const idx = viewSource.indexOf('const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey) => {');
+    const idx = viewSource.indexOf('const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey, options?: RowDraftSaveOptions) => {');
     assert.ok(idx >= 0, 'expected scheduleRowDraftSave to exist with the protectionKey parameter');
-    const body = viewSource.slice(idx, idx + 6000);
+    const body = viewSource.slice(idx, idx + 9000);
     // Unconditional set — scheduleRowDraftSave has no awareness of
     // conflict/resolution history for a row; every genuine edit sets it.
     assert.match(

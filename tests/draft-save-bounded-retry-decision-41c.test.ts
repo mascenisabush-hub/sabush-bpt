@@ -163,7 +163,7 @@ describe('PeriodicStockCountView.tsx — cancelRowRetry (§6/§8 generation/inva
 });
 
 describe('PeriodicStockCountView.tsx — scheduleRowDraftSave (§6: newer edit cancels old retry)', () => {
-  const body = extractFunctionBody(periodicSrc, 'const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey) => {');
+  const body = extractFunctionBody(periodicSrc, 'const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey, options?: RowDraftSaveOptions) => {');
 
   it('cancels the row\'s pending retry (via cancelRowRetry) BEFORE scheduling the new debounce timer — not only when the timer eventually fires', () => {
     const cancelIdx = body.indexOf('const generation = cancelRowRetry(rowKey);');

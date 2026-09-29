@@ -139,7 +139,9 @@ describe('AC-A5 — no financial-value, rules, snapshot, or write-path code touc
       periodicSrc.indexOf('draftSaveState !== \'editing\''),
       periodicSrc.indexOf('productsError &&')
     );
-    assert.doesNotMatch(draftSaveStateSection, /firestore\.rules|firestore\.indexes|setDoc|updateDoc|addDoc|deleteDoc/);
+    // Code only: comments may legitimately mention firestore.rules.
+    const draftSaveStateCode = draftSaveStateSection.replace(/\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+    assert.doesNotMatch(draftSaveStateCode, /firestore\.rules|firestore\.indexes|setDoc|updateDoc|addDoc|deleteDoc/);
   });
 
   it('BusinessWorthSnapshot creation/semantics are not referenced by either edit\'s surrounding context', () => {

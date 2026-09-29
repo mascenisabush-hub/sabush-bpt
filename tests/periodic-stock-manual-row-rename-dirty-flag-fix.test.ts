@@ -80,7 +80,7 @@ describe('Bug fix — manual-row rename no longer freezes/reverts mid-typing', (
 
   it('scheduleRowDraftSave itself re-arms rowHasUnsavedLocalEditRef ONLY for catalog:/manual: keys — confirming why __meta__ alone could never have protected the renamed row (now keyed by protectionKey, valued by rowKey — see the dirty-flag stable-identity correction)', () => {
     const scheduleFnMatch = periodicSrc.match(
-      /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey\) => \{[\s\S]*?\n  \};/
+      /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey, options\?: RowDraftSaveOptions\) => \{[\s\S]*?\n  \};/
     );
     assert.ok(scheduleFnMatch, 'expected to find scheduleRowDraftSave');
     assert.match(
@@ -115,7 +115,7 @@ describe('Bug fix — manual-row rename no longer freezes/reverts mid-typing', (
     assert.ok(updateManualRowMatch, 'expected to find updateManualRow');
     assert.match(
       updateManualRowMatch![0],
-      /scheduleRowDraftSave\(\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`\s*\n\s*\);/
+      /scheduleRowDraftSave\(\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,\s*\n\s*\{ delayMs: 'validated' in fields \? ROW_SAVE_IMMEDIATE_DELAY_MS : undefined \}\s*\n\s*\);/
     );
   });
 });

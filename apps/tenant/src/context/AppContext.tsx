@@ -7821,7 +7821,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let committedOwnWrite = null as { rev: number; lastWriteAt: string } | null;
     await runTransaction(db, async (tx) => {
       committedOwnWrite = null; // a retried transaction body starts clean
-      const [currentSnap, metaSnap] = await Promise.all([tx.get(itemRef), tx.get(metaRef)]);
+      // [Firestore usage reduction] The draft meta is only needed when the
+      // row is being CREATED (draft still active?) or on the rare CONFLICT
+      // branch (openConflictCount). Reading it on every save of an existing
+      // row cost one billed read per save for nothing. It is now read only
+      // in those two branches — each time before that branch's first write,
+      // as Firestore transactions require — with identical semantics.
+      const currentSnap = await tx.get(itemRef);
       const current = currentSnap.exists() ? (currentSnap.data() as PeriodicStockDraftItem) : null;
       const currentState = current?.state ?? 'ACCEPTED';
 
@@ -7856,6 +7862,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // case. `metaSnap` is already read above for the unrelated
         // openConflictCount bookkeeping the CONFLICT branch below uses;
         // reusing it here costs no additional read.
+        const metaSnap = await tx.get(metaRef);
         if (!metaSnap.exists()) {
           throw new Error(
             'Esta Contagem já não está ativa — a alteração não foi guardada.'
@@ -8028,6 +8035,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // not a "self" the way an active, informed correction is, and
       // must not get a different, more dangerous default than an
       // honest two-person disagreement gets.
+      const metaSnap = await tx.get(metaRef);
       tx.set(itemRef, {
         ...current,
         state: 'CONFLICT',

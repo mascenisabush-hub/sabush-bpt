@@ -508,7 +508,7 @@ describe('Validation-state autosave / T0-T100 correctness (Decision 40 FR-N10; R
   it('updateCatalogRow/updateManualRow (the write path Validar/Editar/Corrigir all use to set validated) schedule their row\'s own existing timer key — no new timer key scheme was introduced for validated', () => {
     const catalogBody = extractFunctionBody(source, 'const updateCatalogRow = (');
     const manualBody = extractFunctionBody(source, 'const updateManualRow = (');
-    assert.match(catalogBody, /scheduleRowDraftSave\(`catalog:\$\{productId\}`\)/);
+    assert.match(catalogBody, /scheduleRowDraftSave\(`catalog:\$\{productId\}`, `catalog:\$\{productId\}`, \{/);
     // [Integration Point 2] prefers the row's stable key, positional fallback.
     assert.match(manualBody, /scheduleRowDraftSave\(\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,/);
   });

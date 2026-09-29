@@ -43,7 +43,7 @@ describe('updateManualRow / handleRenameManualGroup — save target uses the row
     assert.ok(fnMatch);
     assert.match(
       fnMatch![0],
-      /scheduleRowDraftSave\(\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`\s*\n\s*\);/
+      /scheduleRowDraftSave\(\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,\s*\n\s*\{ delayMs: 'validated' in fields \? ROW_SAVE_IMMEDIATE_DELAY_MS : undefined \}\s*\n\s*\);/
     );
   });
 
@@ -59,7 +59,7 @@ describe('updateManualRow / handleRenameManualGroup — save target uses the row
 
 describe('scheduleRowDraftSave — recovery-content resolution corrected for non-numeric keys', () => {
   it('resolves manual-row content by matching sourceRowKey against rowKey, not by parsing the suffix as a numeric index', () => {
-    const fnMatch = componentSource.match(/const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey\) => \{[\s\S]*?\n  \};/);
+    const fnMatch = componentSource.match(/const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey, options\?: RowDraftSaveOptions\) => \{[\s\S]*?\n  \};/);
     assert.ok(fnMatch);
     assert.match(
       fnMatch![0],
@@ -68,7 +68,7 @@ describe('scheduleRowDraftSave — recovery-content resolution corrected for non
   });
 
   it('the positional fallback still exists for a row whose sourceRowKey is genuinely not yet set — never a hard failure', () => {
-    const fnMatch = componentSource.match(/const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey\) => \{[\s\S]*?\n  \};/);
+    const fnMatch = componentSource.match(/const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey, options\?: RowDraftSaveOptions\) => \{[\s\S]*?\n  \};/);
     assert.match(fnMatch![0], /Number\(rowKey\.slice\('manual:'\.length\)\)/);
   });
 });

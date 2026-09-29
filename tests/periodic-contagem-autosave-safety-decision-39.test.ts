@@ -77,7 +77,7 @@ describe('A — independent per-row timers (Decision 39a FR-N1)', () => {
 
   it('updateCatalogRow schedules a timer keyed by this row\'s own productId', () => {
     const body = extractFunctionBody(source, 'const updateCatalogRow = (');
-    assert.match(body, /scheduleRowDraftSave\(`catalog:\$\{productId\}`\)/);
+    assert.match(body, /scheduleRowDraftSave\(`catalog:\$\{productId\}`, `catalog:\$\{productId\}`, \{/);
   });
 
   it('updateManualRow schedules a timer keyed by this row\'s own array index', () => {
@@ -88,7 +88,7 @@ describe('A — independent per-row timers (Decision 39a FR-N1)', () => {
   });
 
   it('editing a catalog row and editing a manual row use disjoint key prefixes ("catalog:" vs "manual:"), so neither can ever collide with or reset the other\'s timer', () => {
-    assert.match(source, /scheduleRowDraftSave\(`catalog:\$\{productId\}`\)/);
+    assert.match(source, /scheduleRowDraftSave\(`catalog:\$\{productId\}`, `catalog:\$\{productId\}`, \{/);
     assert.match(source, /scheduleRowDraftSave\(\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,/);
   });
 
@@ -123,10 +123,10 @@ describe('C — live-state sourcing / T0-T100 stale-write protection (Decision 3
     // scheduleRowDraftSave's own parameter list must be JUST the row
     // key — no nextCatalogRows/nextManualRows/etc. argument exists to
     // capture a stale snapshot in the first place.
-    assert.match(source, /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey\) => \{/);
+    assert.match(source, /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey, options\?: RowDraftSaveOptions\) => \{/);
   });
 
-  it('latestFlushArgs is reassigned unconditionally on every render, so it is always current by the time any row\'s 800ms timer actually fires', () => {
+  it('latestFlushArgs is reassigned unconditionally on every render, so it is always current by the time any row\'s debounce timer actually fires', () => {
     assert.match(
       source,
       /const latestFlushArgs = useRef\(\{ catalogRows, manualRows, type, label, date, newProductInfo, caixerDraft \}\);\s*\n\s*latestFlushArgs\.current = \{ catalogRows, manualRows, type, label, date, newProductInfo, caixerDraft \};/
