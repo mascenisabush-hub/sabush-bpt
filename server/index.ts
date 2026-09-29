@@ -24,6 +24,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { backgroundWorker } from './backgroundWorker';
+import { normalizePermissions, MANAGER_PRESET_PERMISSIONS, STAFF_DEFAULT_PERMISSIONS } from '../packages/shared-types/permissions';
 import { resolveServiceMode, isTenantMode, createTenantOnlyMiddleware } from './serviceMode';
 import { createNotificationPlatform } from './notificationPlatform';
 import { registerTrialNotificationPolicyAndTemplates, createTrialNotificationProducer } from './trialNotificationProducer';
@@ -605,7 +606,8 @@ async function verifyStaffManagementAction(
     requesterProfile.role === 'staff' &&
     requesterProfile.staffTier === 'manager' &&
     requesterProfile.businessId === businessId &&
-    requesterProfile.managerPermissions?.staffManagement === true;
+    (requesterProfile.managerPermissions?.staffManagement === true ||
+      requesterProfile.permissions?.staffManagement_act === true);
 
   if (!isAdmin && !isGrantedManager) {
     const message = options.adminOnly
@@ -1510,14 +1512,32 @@ expressApp.post('/api/staff/set-tier', tenantOnly, requireAuth, async (req: Auth
     staffName = staffProfileSnap.data()?.name || staffRosterSnap.data()?.name || 'Funcionário';
     previousTier = staffProfileSnap.data()?.staffTier === 'manager' ? 'manager' : 'staff';
 
+    // Owner-Granted Permissions: a full explicit `permissions` map is written
+    // in the same batch. Body may carry one (new UI); otherwise derive it from
+    // the legacy two toggles so the existing Funcionários screen keeps working.
+    // Promotion starts from the manager preset (everything grantable), demotion
+    // resets to the plain staff defaults — never a stale grant left behind.
+    const bodyPermissions = req.body?.permissions;
+    const nextPermissions = normalizePermissions(
+      requestedTier === 'manager'
+        ? (bodyPermissions && typeof bodyPermissions === 'object'
+            ? bodyPermissions
+            : { ...MANAGER_PRESET_PERMISSIONS,
+                closings_view: requestedPermissions.closings, closings_act: requestedPermissions.closings,
+                staffManagement_act: requestedPermissions.staffManagement })
+        : STAFF_DEFAULT_PERMISSIONS,
+      { isManager: requestedTier === 'manager' }
+    );
     const batch = db.batch();
     batch.update(db.collection('users').doc(staffUid), {
       staffTier: requestedTier,
       managerPermissions: requestedPermissions,
+      permissions: nextPermissions,
     });
     batch.update(db.collection('businesses').doc(businessId).collection('staff').doc(staffUid), {
       staffTier: requestedTier,
       managerPermissions: requestedPermissions,
+      permissions: nextPermissions,
     });
     await batch.commit();
   } catch (err) {
@@ -1596,6 +1616,115 @@ expressApp.post('/api/staff/set-tier', tenantOnly, requireAuth, async (req: Auth
 
   console.log('[staff/set-tier] success', { requesterUid, staffUid, businessId, staffTier: requestedTier, timestamp: startedAt });
   const response: Record<string, unknown> = { success: true, staffUid, staffTier: requestedTier, managerPermissions: requestedPermissions };
+  if (!auditLogged) response.auditLogged = false;
+  if (!notificationLogged) response.notificationLogged = false;
+  res.json(response);
+});
+
+// ------------------------------------------------------------------
+// POST /api/staff/set-permissions   (Owner-Granted Permissions)
+// Body: { staffUid: string, businessId: string, permissions: { [<area>_<view|act>]: boolean } }
+//
+// Owner/Admin-only, deliberately (adminOnly) — a Manager can never change
+// anyone's permissions, including their own. The map is cleaned by
+// normalizePermissions (known keys only, strict booleans, act => view,
+// staffManagement dropped unless the target is a manager) and always stored
+// as a FULL explicit map, so "saved" is never confused with "never
+// configured". Owner-only capabilities (data reset, permission management,
+// subscription, shops/portfolio, credentials) are not keys and therefore
+// cannot be granted by any request. users/{uid} is authoritative;
+// staff/{uid} is the display mirror, written in the same batch.
+// ------------------------------------------------------------------
+expressApp.post('/api/staff/set-permissions', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
+  const requesterUid = req.callerUid!;
+  const startedAt = new Date().toISOString();
+  const staffUid = String(req.body?.staffUid || '').trim();
+  const businessId = String(req.body?.businessId || '').trim();
+
+  if (!staffUid || !businessId || !req.body?.permissions || typeof req.body.permissions !== 'object') {
+    res.status(400).json({ error: 'invalid-argument', message: 'staffUid, businessId e permissions são obrigatórios.' });
+    return;
+  }
+
+  let staffName = 'Funcionário';
+  let requesterName = 'Dono';
+  let saved: ReturnType<typeof normalizePermissions>;
+  try {
+    const permissionError = await verifyStaffManagementAction(requesterUid, staffUid, businessId, { adminOnly: true });
+    if (permissionError) {
+      console.warn('[staff/set-permissions] permission denied', { requesterUid, staffUid, businessId });
+      res.status(permissionError.status).json(permissionError.body);
+      return;
+    }
+    const [requesterSnap, staffProfileSnap, staffRosterSnap] = await Promise.all([
+      db.collection('users').doc(requesterUid).get(),
+      db.collection('users').doc(staffUid).get(),
+      db.collection('businesses').doc(businessId).collection('staff').doc(staffUid).get(),
+    ]);
+    requesterName = requesterSnap.data()?.name || requesterName;
+    const staffProfile = staffProfileSnap.data();
+    staffName = staffProfile?.name || staffRosterSnap.data()?.name || staffName;
+    if (staffProfile && staffProfile.role !== 'staff') {
+      res.status(400).json({ error: 'invalid-argument', message: 'Só é possível definir permissões de funcionários.' });
+      return;
+    }
+    saved = normalizePermissions(req.body.permissions, { isManager: staffProfile?.staffTier === 'manager' });
+
+    const batch = db.batch();
+    batch.update(db.collection('users').doc(staffUid), { permissions: saved });
+    batch.update(db.collection('businesses').doc(businessId).collection('staff').doc(staffUid), { permissions: saved });
+    await batch.commit();
+  } catch (err) {
+    console.error('[staff/set-permissions] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao guardar as permissões. Tente novamente.' });
+    return;
+  }
+
+  // Best-effort audit + notification, same discipline as set-tier: the
+  // permission change above already succeeded and must never be reported
+  // as failed because of these.
+  const eventId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const grantedCount = Object.values(saved).filter(Boolean).length;
+  let auditLogged = true;
+  try {
+    await db.collection('businesses').doc(businessId).collection('timelineEvents').doc(eventId).set({
+      id: eventId,
+      type: 'staff-permissions-changed',
+      date: startedAt.slice(0, 10),
+      createdAt: startedAt,
+      userName: requesterName,
+      title: 'Permissões do Funcionário Alteradas',
+      description: `${staffName}: ${grantedCount} permissões ativas.`,
+      details: { staffName, changedBy: requesterName, permissions: saved },
+    });
+  } catch (err) {
+    console.error('[staff/set-permissions] timeline stage failed after batch commit succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    auditLogged = false;
+  }
+  let notificationLogged = true;
+  try {
+    await writeNotification({
+      scope: 'user',
+      businessId: null,
+      userId: staffUid,
+      category: 'staff',
+      type: 'staff_tier_changed',
+      payloadRef: { collection: 'users', documentId: staffUid },
+      dedupeKey: `${staffUid}:staff_tier_changed:${eventId}`,
+      context: {
+        whatHappened: 'As suas permissões nesta empresa foram alteradas.',
+        whyItMatters: 'Isto altera o que pode ver e fazer na aplicação.',
+        recommendedAction: 'Reveja as suas novas permissões com o proprietário da empresa.',
+      },
+      priority: 'immediate',
+    });
+  } catch (err) {
+    console.error('[staff/set-permissions] notification stage failed after batch commit succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    notificationLogged = false;
+  }
+
+  console.log('[staff/set-permissions] success', { requesterUid, staffUid, businessId, grantedCount, timestamp: startedAt });
+  const response: Record<string, unknown> = { success: true, staffUid, permissions: saved };
   if (!auditLogged) response.auditLogged = false;
   if (!notificationLogged) response.notificationLogged = false;
   res.json(response);

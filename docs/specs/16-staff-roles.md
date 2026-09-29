@@ -296,3 +296,76 @@ This module is complete when:
 **Approved.** Delete is included in the `staffManagement` permission,
 per explicit decision above. Implementation may proceed under this spec,
 per Rule 8.
+
+
+---
+
+# Amendment A — Owner-Granted Permissions
+
+**Status:** Approved by the Product Owner (chat decision), implemented in
+stages. **Supersedes** the "exactly two Manager permissions" rule above
+(`closings`, `staffManagement`) for everything except the invariants
+listed under *Unchanged*. Architecture 6.3's `managerPermissions` map is
+kept as a legacy input; it is no longer the only grant mechanism.
+
+## Rule
+
+The business owner decides, per staff account, what that person can **see**
+and what they can **do**, for any part of the app — except the owner-only
+list below. A Manager is a preset, not a ceiling.
+
+## Data model
+
+- `users/{uid}.permissions` (mirrored to `businesses/{id}/staff/{uid}`):
+  a flat map `<area>_<level>` -> `true`, where `level` is `view` or `act`
+  and `act` implies `view`. Areas: dashboard, stocks, catalog, addStock,
+  quebras, stockCount, declareWorth, closings, reports, timeline, cashFlow,
+  expenses, withdrawals, investments, staffManagement (act only).
+- Source of truth for the key list: `packages/shared-types/permissions.ts`
+  (mirrored by name in `firestore.rules`).
+- Written **only** by the server, `POST /api/staff/set-permissions`,
+  owner-only. Immutable from any client (users update rule; users create
+  rule rejects `permissions`/`managerPermissions` on new staff profiles).
+- A saved map is always **complete and explicit** (every key true/false).
+  **Absent map = never configured**: the account keeps today's behaviour
+  (staff: add stock + breakages; legacy manager: plus its two old grants).
+  No data migration is required.
+
+## Presets
+
+- **Staff (default):** `addStock`, `quebras` (view + act).
+- **Manager:** promotion switches on every grantable permission; the owner
+  may then switch any of them off for that person. Demotion resets to the
+  staff default (no stale grants).
+- `staffManagement` can only be held by a manager-tier account.
+
+## Owner-only (cannot be granted; not representable as a key)
+
+Business data reset; changing roles or permissions; managing other
+managers or the owner; subscription and payments; adding/removing/switching
+shops and the owner portfolio; the owner's own credentials (login and
+Clear-Data password). Also kept owner-only for now, pending a decision:
+editing the business profile document (`businesses/{id}` update) and
+delegating the Periodic Contagem editor (`contagemAuthority`).
+
+## Enforcement
+
+`firestore.rules` is the authority; the UI only reflects it. New rule
+functions: `hasPerm`, `ownerOrPerm`, `staffCanByDefault`, `canAddStock`,
+`canWriteWorthSnapshot`. Collections restricted to the owner today
+(cash flow, withdrawals, investments, stock-count drafts, ...) are readable
+and writable by staff holding the matching `view`/`act` key. Collections
+staff already read to do their basic job (batches, products, suppliers,
+purchase batches, quebras, expenses, timeline, stock counts, snapshots)
+stay readable by members; only their **create/delete** are permission-gated.
+Consequence, stated honestly: hiding a screen from a staff member whose
+data is member-readable is UI-level hiding, not data-level.
+
+## Acceptance (Stage 1)
+
+- [x] Shared model + unit tests (`tests/staff-permissions-model.test.ts`).
+- [x] Rules + server endpoint implemented; `set-tier` writes `permissions`.
+- [ ] Rules emulator suite extended and run (`npm run test:rules:emulator`)
+      — **not runnable in the authoring sandbox; must be run before deploy.**
+- [ ] Stage 2: `can()` in AppContext, permission-driven navigation, and the
+      per-staff "Permissões" panel in Settings.

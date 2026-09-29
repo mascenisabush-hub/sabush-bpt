@@ -105,13 +105,61 @@ service cloud.firestore {
     // writable only by the privileged server (server/index.ts), never by
     // the client, same guarantee as `suspended`.
     function isOwnerOrGrantedManager(businessId, permission) {
-      return isOwnerOf(businessId) || (
+      return isOwnerOf(businessId) ||
+        hasPerm(businessId, permission + '_act') || (
         isMemberOf(businessId) &&
         myProfile().role == 'staff' &&
         myProfile().get('staffTier', 'staff') == 'manager' &&
         myProfile().businessId == businessId &&
         myProfile().get('managerPermissions', {}).get(permission, false) == true
       );
+    }
+
+    // Owner-Granted Permissions (spec 16 amendment). `permissions` is a flat
+    // map of `<area>_<view|act>` -> true on the staff member's users/{uid}
+    // profile, written ONLY by the server (/api/staff/set-permissions) and
+    // immutable from any client (see the users update rule). Key names mirror
+    // packages/shared-types/permissions.ts. No tier requirement: the owner
+    // may grant any staff account any grantable permission.
+    function hasPerm(businessId, key) {
+      return isMemberOf(businessId) &&
+        myProfile().role == 'staff' &&
+        myProfile().businessId == businessId &&
+        myProfile().get('permissions', {}).get(key, false) == true;
+    }
+
+    function ownerOrPerm(businessId, key) {
+      return isOwnerOf(businessId) || hasPerm(businessId, key);
+    }
+
+    // For actions Staff could already perform before this feature: a staff
+    // profile that was never configured (no `permissions` map) keeps the
+    // old default (`dflt`); once the owner has saved permissions the map is
+    // always complete and explicit, so it decides.
+    function staffCanByDefault(businessId, key, dflt) {
+      return isOwnerOf(businessId) || (
+        isMemberOf(businessId) &&
+        myProfile().role == 'staff' &&
+        (myProfile().get('permissions', null) == null ? dflt : myProfile().permissions.get(key, false) == true)
+      );
+    }
+
+    // Creating stock-side records (batches, purchase envelopes, suppliers,
+    // products, open-batch locks). Also allowed to whoever legitimately
+    // creates them as a side effect of a count or catalog task.
+    function canAddStock(businessId) {
+      return staffCanByDefault(businessId, 'addStock_act', true) ||
+        hasPerm(businessId, 'stockCount_act') ||
+        hasPerm(businessId, 'catalog_act');
+    }
+
+    // Business Worth snapshots are written by counts, declared worth and
+    // closings alike.
+    function canWriteWorthSnapshot(businessId) {
+      return isOwnerOf(businessId) ||
+        hasPerm(businessId, 'stockCount_act') ||
+        hasPerm(businessId, 'declareWorth_act') ||
+        hasPerm(businessId, 'closings_act');
     }
 
     // [Decisions 44-56 — Periodic Contagem Shared Live Data;
@@ -144,7 +192,8 @@ service cloud.firestore {
     // never a member of this set, by construction, not by a separate
     // stored flag.
     function isActiveContagemEditor(businessId) {
-      return isOwnerOf(businessId) || isCurrentDelegatedEditor(businessId);
+      return isOwnerOf(businessId) || isCurrentDelegatedEditor(businessId) ||
+        hasPerm(businessId, 'stockCount_act');
     }
 
     // [Module #20 Phase 1 (Foundations), Checkpoint 2] `notifications` is
@@ -447,6 +496,7 @@ service cloud.firestore {
           request.auth.uid != userId &&
           request.resource.data.role == 'staff' &&
           request.resource.data.get('staffTier', 'staff') == 'staff' &&
+          !request.resource.data.keys().hasAny(['permissions', 'managerPermissions']) &&
           isOwnerOrGrantedManager(request.resource.data.businessId, 'staffManagement')
         )
       );
@@ -473,6 +523,7 @@ service cloud.firestore {
         request.resource.data.get('suspended', false) == resource.data.get('suspended', false) &&
         request.resource.data.get('staffTier', 'staff') == resource.data.get('staffTier', 'staff') &&
         request.resource.data.get('managerPermissions', {}) == resource.data.get('managerPermissions', {}) &&
+        request.resource.data.get('permissions', {}) == resource.data.get('permissions', {}) &&
         isValidBusinessIdsChange() &&
         isValidActiveBusinessIdChange();
 
@@ -569,10 +620,10 @@ service cloud.firestore {
         // unaffected by this amendment, still deliberately left
         // untouched here, same create-only scope as the batches
         // validation above.
-        allow create: if isMemberOf(businessId) &&
+        allow create: if canAddStock(businessId) &&
           request.resource.data.get('name', null) is string &&
           request.resource.data.get('name', '') != '';
-        allow update, delete: if isOwnerOf(businessId);
+        allow update, delete: if ownerOrPerm(businessId, 'catalog_act');
       }
 
       // [Durable Purchase Capture Amendment v1.0] Reusable, tenant-scoped
@@ -583,8 +634,8 @@ service cloud.firestore {
       // valuation input anywhere — see the amendment's Part 10.
       match /suppliers/{supplierId} {
         allow read: if isMemberOf(businessId);
-        allow create: if isMemberOf(businessId);
-        allow update, delete: if isOwnerOf(businessId);
+        allow create: if canAddStock(businessId);
+        allow update, delete: if ownerOrPerm(businessId, 'stocks_act');
       }
 
       match /batches/{batchId} {
@@ -602,7 +653,7 @@ service cloud.firestore {
         // — `allow update` below is completely unchanged, so the
         // existing status-only close-out update, or any other update
         // path, can never be newly rejected by this addition.
-        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId) &&
+        allow create: if canAddStock(businessId) && subscriptionAllowsNewRecords(businessId) &&
           request.resource.data.get('productId', null) is string &&
           request.resource.data.get('productId', '') != '' &&
           request.resource.data.get('dateEntered', null) is string &&
@@ -617,7 +668,7 @@ service cloud.firestore {
         // Batches are also updated by staff/owner alike when a new batch
         // closes out the previous open one (addStockBatch / addMultipleStockBatches).
         allow update: if isMemberOf(businessId);
-        allow delete: if isOwnerOf(businessId);
+        allow delete: if ownerOrPerm(businessId, 'stocks_act');
       }
 
       // [Fix #10 — transactional open-batch supersession] Per-product
@@ -636,7 +687,7 @@ service cloud.firestore {
       // doc's existence alone).
       match /openBatchLocks/{productId} {
         allow read: if isMemberOf(businessId);
-        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId);
+        allow create: if canAddStock(businessId) && subscriptionAllowsNewRecords(businessId);
         allow update: if isMemberOf(businessId);
         allow delete: if false;
       }
@@ -665,11 +716,11 @@ service cloud.firestore {
         // already-finalized PurchaseBatch (Part 7/14 of that amendment)
         // uses the update rule below, unmodified — this create-time
         // check only covers a purchaseEventId supplied at creation.
-        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId) &&
+        allow create: if canAddStock(businessId) && subscriptionAllowsNewRecords(businessId) &&
           (!('supplierId' in request.resource.data) || request.resource.data.supplierId is string) &&
           (!('purchaseEventId' in request.resource.data) || request.resource.data.purchaseEventId is string);
         allow update: if isMemberOf(businessId);
-        allow delete: if isOwnerOf(businessId);
+        allow delete: if ownerOrPerm(businessId, 'stocks_act');
       }
 
       match /quebras/{quebraId} {
@@ -682,11 +733,11 @@ service cloud.firestore {
         // backstop at all, unlike newer collections (Cash Position,
         // Startup Investment) which already validate their own amount
         // field this way.
-        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId) &&
+        allow create: if staffCanByDefault(businessId, 'quebras_act', true) && subscriptionAllowsNewRecords(businessId) &&
           request.resource.data.get('quantityLost', null) is number &&
           request.resource.data.get('quantityLost', 0) > 0;
         allow update: if isMemberOf(businessId);
-        allow delete: if isOwnerOf(businessId);
+        allow delete: if ownerOrPerm(businessId, 'quebras_act');
       }
 
       // [Closing Integrity Amendment v1.0]
@@ -705,16 +756,16 @@ service cloud.firestore {
         // [Data-entry error-resilience audit, Finding 4] amount
         // validation added — same rationale as quebras' own identical
         // addition above.
-        allow create: if isMemberOf(businessId) &&
+        allow create: if staffCanByDefault(businessId, 'expenses_act', true) &&
           !isDateInsideClosedPeriod(businessId, request.resource.data.date) &&
           subscriptionAllowsNewRecords(businessId) &&
           request.resource.data.get('amount', null) is number &&
           request.resource.data.get('amount', 0) > 0;
-        allow update: if isMemberOf(businessId) && (
+        allow update: if staffCanByDefault(businessId, 'expenses_act', true) && (
           resource.data.get('closingId', null) == null ||
-          (isOwnerOf(businessId) && request.resource.data.get('closingId', null) == null)
+          (ownerOrPerm(businessId, 'expenses_act') && request.resource.data.get('closingId', null) == null)
         );
-        allow delete: if isOwnerOf(businessId) &&
+        allow delete: if ownerOrPerm(businessId, 'expenses_act') &&
           resource.data.get('closingId', null) == null;
       }
 
@@ -755,7 +806,7 @@ service cloud.firestore {
         // design (Finding F1) makes newly load-bearing — it does not
         // touch, weaken, or reinterpret any already-approved
         // BDR-0015/POL-0008 decision.
-        allow create: if isOwnerOf(businessId) && (
+        allow create: if ownerOrPerm(businessId, 'stockCount_act') && (
           // Non-'initial' counts (periodic/weekly/monthly/etc.) —
           // [Decision 55 §5 items 7-10; Implementation Authorization
           // §2 item 7] now additionally requires that the single
@@ -918,7 +969,7 @@ service cloud.firestore {
       // confirmedAt, which this rule must never allow.
       match /businessWorthSnapshots/{snapshotId} {
         allow read: if isMemberOf(businessId);
-        allow create: if isOwnerOf(businessId) &&
+        allow create: if canWriteWorthSnapshot(businessId) &&
           request.resource.data.get('businessId', null) == businessId &&
           request.resource.data.get('id', null) == snapshotId &&
           // [Rule 8 Finding B1 — same discipline as StockCount.confirmedAt]
@@ -1068,7 +1119,7 @@ service cloud.firestore {
         // touching any other field (every frozen figure —
         // measuredBusinessWorth, productValuationDetail,
         // cashPosition, etc. — remains exactly as originally written).
-        allow update: if isOwnerOf(businessId) &&
+        allow update: if canWriteWorthSnapshot(businessId) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
           resource.data.get('status', null) == 'active' &&
           (
@@ -1126,7 +1177,7 @@ service cloud.firestore {
         // atomic client batch, exactly like the existing atomic
         // snapshot-producing confirmation (Plan §5) this increment
         // extends, rather than requiring a mid-flow server round-trip.
-        allow update: if isOwnerOf(businessId) &&
+        allow update: if ownerOrPerm(businessId, 'stockCount_act') &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'consumedAt']) &&
           resource.data.get('status', null) == 'unconsumed' &&
           request.resource.data.get('status', null) == 'consumed' &&
@@ -1146,8 +1197,8 @@ service cloud.firestore {
       // — matching the closed-enum discipline this file already applies
       // elsewhere (e.g. BusinessWorthSnapshot.status, above).
       match /cashLedgerEntries/{entryId} {
-        allow read: if isOwnerOf(businessId);
-        allow create: if isOwnerOf(businessId) &&
+        allow read: if ownerOrPerm(businessId, 'cashFlow_view');
+        allow create: if ownerOrPerm(businessId, 'cashFlow_act') &&
           request.resource.data.get('businessId', null) == businessId &&
           request.resource.data.get('id', null) == entryId &&
           request.resource.data.get('direction', null) in ['inflow', 'outflow'] &&
@@ -1171,8 +1222,8 @@ service cloud.firestore {
       // governed state transition" discipline `closings`' own per-field
       // lock already establishes elsewhere in this file.
       match /receivables/{receivableId} {
-        allow read: if isOwnerOf(businessId);
-        allow create: if isOwnerOf(businessId) &&
+        allow read: if ownerOrPerm(businessId, 'cashFlow_view');
+        allow create: if ownerOrPerm(businessId, 'cashFlow_act') &&
           request.resource.data.get('businessId', null) == businessId &&
           request.resource.data.get('id', null) == receivableId &&
           request.resource.data.get('totalAmount', null) is number &&
@@ -1180,7 +1231,7 @@ service cloud.firestore {
           request.resource.data.get('amountPaid', null) == 0 &&
           request.resource.data.get('amountRemaining', null) == request.resource.data.get('totalAmount', null) &&
           request.resource.data.get('status', null) == 'unpaid';
-        allow update: if isOwnerOf(businessId) &&
+        allow update: if ownerOrPerm(businessId, 'cashFlow_act') &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amountPaid', 'amountRemaining', 'status']) &&
           request.resource.data.get('status', null) in ['unpaid', 'partially-paid', 'paid'];
         allow delete: if false;
@@ -1196,8 +1247,8 @@ service cloud.firestore {
       // identical mechanism this file already relies on for
       // businessWorthSnapshots' own 'bws-' + sourceStockCountId id.
       match /receivablePayments/{paymentId} {
-        allow read: if isOwnerOf(businessId);
-        allow create: if isOwnerOf(businessId) &&
+        allow read: if ownerOrPerm(businessId, 'cashFlow_view');
+        allow create: if ownerOrPerm(businessId, 'cashFlow_act') &&
           request.resource.data.get('id', null) == paymentId &&
           request.resource.data.get('receivableId', null) is string &&
           request.resource.data.get('amountPaid', null) is number &&
@@ -1231,8 +1282,8 @@ service cloud.firestore {
       // is purely about WHERE a Payable is allowed to have come from,
       // never a relaxation of what shape it must already have.
       match /payables/{payableId} {
-        allow read: if isOwnerOf(businessId);
-        allow create: if isOwnerOf(businessId) &&
+        allow read: if ownerOrPerm(businessId, 'cashFlow_view');
+        allow create: if ownerOrPerm(businessId, 'cashFlow_act') &&
           request.resource.data.get('businessId', null) == businessId &&
           request.resource.data.get('id', null) == payableId &&
           request.resource.data.get('totalAmount', null) is number &&
@@ -1246,7 +1297,7 @@ service cloud.firestore {
             (request.resource.data.get('isManualEntry', null) == true &&
              request.resource.data.get('sourcePurchaseBatchId', null) == null)
           );
-        allow update: if isOwnerOf(businessId) &&
+        allow update: if ownerOrPerm(businessId, 'cashFlow_act') &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amountPaid', 'amountRemaining', 'status']) &&
           request.resource.data.get('status', null) in ['unpaid', 'partially-paid', 'paid'];
         allow delete: if false;
@@ -1257,8 +1308,8 @@ service cloud.firestore {
       // receivablePayments' own append-only/idempotent-id rule exactly,
       // for the liability side.
       match /payablePayments/{paymentId} {
-        allow read: if isOwnerOf(businessId);
-        allow create: if isOwnerOf(businessId) &&
+        allow read: if ownerOrPerm(businessId, 'cashFlow_view');
+        allow create: if ownerOrPerm(businessId, 'cashFlow_act') &&
           request.resource.data.get('id', null) == paymentId &&
           request.resource.data.get('payableId', null) is string &&
           request.resource.data.get('amountPaid', null) is number &&
@@ -1279,8 +1330,8 @@ service cloud.firestore {
       // manipulation: it has no `update` path at all, and no other rule
       // in this file reads it when computing any Business Worth figure.
       match /startupInvestmentEntries/{entryId} {
-        allow read: if isOwnerOf(businessId);
-        allow create: if isOwnerOf(businessId) &&
+        allow read: if ownerOrPerm(businessId, 'investments_view');
+        allow create: if ownerOrPerm(businessId, 'investments_act') &&
           request.resource.data.get('businessId', null) == businessId &&
           request.resource.data.get('id', null) == entryId &&
           request.resource.data.get('category', null) in
@@ -1319,8 +1370,8 @@ service cloud.firestore {
       // principle applied to a collection that came later, not a new
       // decision.
       match /ownerInvestments/{investmentId} {
-        allow read: if isOwnerOf(businessId);
-        allow create: if isOwnerOf(businessId) &&
+        allow read: if ownerOrPerm(businessId, 'investments_view');
+        allow create: if ownerOrPerm(businessId, 'investments_act') &&
           request.resource.data.get('businessId', null) == businessId &&
           request.resource.data.get('id', null) == investmentId &&
           !isDateInsideClosedPeriod(businessId, request.resource.data.date) &&
@@ -1343,8 +1394,8 @@ service cloud.firestore {
       // CashPositionDeclaration's own type comment (types.ts) for how it
       // actually reaches Business Worth.
       match /cashPositionDeclarations/{entryId} {
-        allow read: if isOwnerOf(businessId);
-        allow create: if isOwnerOf(businessId) &&
+        allow read: if ownerOrPerm(businessId, 'cashFlow_view');
+        allow create: if ownerOrPerm(businessId, 'cashFlow_act') &&
           request.resource.data.get('businessId', null) == businessId &&
           request.resource.data.get('id', null) == entryId &&
           request.resource.data.get('amount', null) is number &&
@@ -1380,7 +1431,7 @@ service cloud.firestore {
         // conditions directly, and to no other write path in this
         // file (Option A item 3, verbatim: "NOT authorization to
         // bypass subscription enforcement generally").
-        allow create: if isOwnerOf(businessId) &&
+        allow create: if ownerOrPerm(businessId, 'stockCount_act') &&
           request.resource.data.get('voidedConfirmationId', null) == stockCountId &&
           // Tenant isolation is structural, not merely checked: the
           // target lookup inside initialStockConfirmationVoidable() (and,
@@ -1491,14 +1542,14 @@ service cloud.firestore {
       // exclusion, since additive rules can only ever grant more
       // access, never less.
       match /stockCountDrafts/{draftId} {
-        allow read: if isOwnerOf(businessId);
-        allow create, update: if isOwnerOf(businessId) && subscriptionAllowsNewRecords(businessId) && draftId != 'periodic';
+        allow read: if ownerOrPerm(businessId, 'stockCount_view');
+        allow create, update: if ownerOrPerm(businessId, 'stockCount_act') && subscriptionAllowsNewRecords(businessId) && draftId != 'periodic';
         // Deleting/clearing the draft (including the delete that happens
         // as part of confirmation) is never subscription-gated, matching
         // every other collection's delete rule in this file — a blocked
         // subscription should never trap an owner unable to clean up
         // their own provisional draft.
-        allow delete: if isOwnerOf(businessId);
+        allow delete: if ownerOrPerm(businessId, 'stockCount_act');
 
         // [Bug fix — per-product independent draft persistence] Each
         // counted row now lives as its OWN document here, rather than
@@ -1510,9 +1561,9 @@ service cloud.firestore {
         // Users-table scoping) — this is a storage-shape change only,
         // not a new access-control surface.
         match /items/{rowKey} {
-          allow read: if isOwnerOf(businessId);
-          allow create, update: if isOwnerOf(businessId) && subscriptionAllowsNewRecords(businessId) && draftId != 'periodic';
-          allow delete: if isOwnerOf(businessId);
+          allow read: if ownerOrPerm(businessId, 'stockCount_view');
+          allow create, update: if ownerOrPerm(businessId, 'stockCount_act') && subscriptionAllowsNewRecords(businessId) && draftId != 'periodic';
+          allow delete: if ownerOrPerm(businessId, 'stockCount_act');
         }
       }
 
@@ -1739,7 +1790,7 @@ service cloud.firestore {
         // self-consistent (own businessId, own author) and cannot arrive
         // pre-negative — cheap, deterministic checks the rules layer can
         // make without a second read.
-        allow create: if isOwnerOf(businessId) &&
+        allow create: if ownerOrPerm(businessId, 'stockCount_act') &&
           subscriptionAllowsNewRecords(businessId) &&
           request.resource.data.businessId == businessId &&
           request.resource.data.createdBy == request.auth.uid &&
@@ -1763,23 +1814,23 @@ service cloud.firestore {
       // [Closing Integrity Amendment v1.0] Same create/update/delete
       // protections as Expenses, above — see that comment for the rule.
       match /withdrawals/{withdrawalId} {
-        allow read: if isOwnerOf(businessId);
+        allow read: if ownerOrPerm(businessId, 'withdrawals_view');
         // [Module #19 Phase 2] Changes financial position directly —
         // restricted once trial completes/expires (Business Rule 6 /
         // Decision 2), same as Expenses above.
         // [Data-entry error-resilience audit, Finding 4] amount
         // validation added — same rationale as Expenses' own identical
         // addition.
-        allow create: if isOwnerOf(businessId) &&
+        allow create: if ownerOrPerm(businessId, 'withdrawals_act') &&
           !isDateInsideClosedPeriod(businessId, request.resource.data.date) &&
           subscriptionAllowsNewRecords(businessId) &&
           request.resource.data.get('amount', null) is number &&
           request.resource.data.get('amount', 0) > 0;
-        allow update: if isOwnerOf(businessId) && (
+        allow update: if ownerOrPerm(businessId, 'withdrawals_act') && (
           resource.data.get('closingId', null) == null ||
           request.resource.data.get('closingId', null) == null
         );
-        allow delete: if isOwnerOf(businessId) &&
+        allow delete: if ownerOrPerm(businessId, 'withdrawals_act') &&
           resource.data.get('closingId', null) == null;
       }
 
@@ -1845,8 +1896,9 @@ service cloud.firestore {
       // and does not regress, that existing reopen-workflow behavior
       // itself (reopenClosing, AppContext.tsx).
       match /closings/{closingId} {
-        allow read, create: if isOwnerOrGrantedManager(businessId, 'closings');
-        allow update: if isOwnerOf(businessId) &&
+        allow read: if isOwnerOrGrantedManager(businessId, 'closings') || hasPerm(businessId, 'closings_view');
+        allow create: if isOwnerOrGrantedManager(businessId, 'closings');
+        allow update: if ownerOrPerm(businessId, 'closings_act') &&
           request.resource.data.periodType == resource.data.periodType &&
           request.resource.data.periodLabel == resource.data.periodLabel &&
           request.resource.data.startDate == resource.data.startDate &&
@@ -1870,7 +1922,7 @@ service cloud.firestore {
         allow read: if isMemberOf(businessId);
         allow create: if isOwnerOrGrantedManager(businessId, 'closings');
         allow update: if false;
-        allow delete: if isOwnerOf(businessId);
+        allow delete: if ownerOrPerm(businessId, 'closings_act');
       }
 
       // Staff roster management: the Admin can always do this. A Staff
@@ -1900,7 +1952,7 @@ service cloud.firestore {
         allow read: if isMemberOf(businessId);
         allow create: if isMemberOf(businessId);
         allow update: if false;
-        allow delete: if isOwnerOf(businessId);
+        allow delete: if ownerOrPerm(businessId, 'timeline_act');
       }
 
       // ==========================================================

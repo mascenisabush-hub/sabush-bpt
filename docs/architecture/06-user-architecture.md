@@ -128,3 +128,16 @@ The Manager-as-tier pattern (6.3) is the template for any future role refinement
 - **Section 13 (Development Strategy)** will sequence the Manager-tier migration (additive, non-breaking per 6.3) relative to other implementation priorities.
 
 **This section requires your explicit approval before Section 7 (Data Architecture) begins.**
+
+
+---
+
+## 6.3 Amendment — Owner-Granted Permissions
+
+The Manager tier's fixed pair of permissions is generalised: the Admin/Owner
+may grant any staff account per-area `view`/`act` permissions through a
+server-written `permissions` map on `users/{uid}` (see
+docs/specs/16-staff-roles.md, Amendment A). `isOwnerOrGrantedManager` now also
+honours this map; a new `hasPerm(businessId, key)` requires no tier. The
+owner-only boundary (data reset, role/permission changes, subscription,
+shops/portfolio, credentials) is unchanged and not grantable.

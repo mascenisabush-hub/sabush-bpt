@@ -63,6 +63,10 @@ export interface UserProfile {
   // Staff-only (BDS #16). Only meaningful when staffTier === 'manager';
   // ignored otherwise. Set exclusively by the server, same as staffTier.
   managerPermissions?: ManagerPermissions;
+  // Staff-only. Owner-granted permissions (spec 16 amendment): flat map of
+  // `<area>_<view|act>` -> boolean. Absent = never configured (today's
+  // defaults apply). Server-written only — see packages/shared-types/permissions.ts.
+  permissions?: Partial<Record<string, boolean>>;
   // Optional profile avatar, set by the user themselves via the Header
   // profile menu (uploadUserPhoto in AppContext). A Firebase Storage
   // download URL under Storage path `users/{uid}/avatar/...` — never a
@@ -160,6 +164,8 @@ export interface StaffMember {
   // both in sync in the same batch write (see server/index.ts set-tier).
   staffTier?: StaffTier;
   managerPermissions?: ManagerPermissions;
+  // Display mirror of users/{uid}.permissions (same sync as staffTier).
+  permissions?: Partial<Record<string, boolean>>;
 }
 
 // A device-local (never synced to Firestore) cache used by the PIN-based
