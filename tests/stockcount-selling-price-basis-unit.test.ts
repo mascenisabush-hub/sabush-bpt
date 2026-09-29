@@ -42,6 +42,16 @@ const periodicSrc = src('apps/tenant/src/components/PeriodicStockCountView.tsx')
 // ==================================================================
 // TEST 1 — Normal same-unit case: 7 Cx @ 480 MZN/Cx
 // ==================================================================
+// 1 Cx = 24 Un — used where a row's price unit differs from its counted unit.
+const TXILAR_CX_UN = {
+  units: [
+    { unit: 'Cx', factorFromPrevious: 0 },
+    { unit: 'Un', factorFromPrevious: 24 },
+  ],
+  sellingUnit: 'Un',
+  confirmedAt: '2026-08-01T00:00:00.000Z',
+} as unknown as import('../apps/tenant/src/types').UnitRelationship;
+
 describe('TEST 1 — normal same-unit case', () => {
   it('unit=Cx, sellingPriceBasisUnit=Cx, valuation unchanged', () => {
     const { items, totalSellingValue } = normalizeStockCountItems([
@@ -70,9 +80,13 @@ describe('TEST 2 — diverged-unit case', () => {
     const rows: StockCountWorkingRow[] = [
       { productName: 'Txilar', quantity: '7', unit: 'Cx', costPrice: '', sellingPrice: '50', sellingPriceBasisUnit: 'Un', sellingPriceAutoFilled: false },
     ];
-    const { countedItems } = tallyStockCountRows(rows);
+    // [2026-09-29] tallyStockCountRows now values a diverged row through
+    // the product's unit relationship (1 Cx = 24 Un), so it is given one.
+    const { countedItems } = tallyStockCountRows(rows, undefined, () => TXILAR_CX_UN);
     assert.equal(countedItems[0].unit, 'Cx');
     assert.equal(countedItems[0].sellingPriceBasisUnit, 'Un');
+    // 7 Cx × (50/Un × 24) = 8,400 — never 7 × 50 = 350.
+    assert.equal(countedItems[0].sellingValue, 8400);
   });
 });
 
@@ -90,10 +104,12 @@ describe('TEST 3 — dangerous sequence: deliberate 480/Cx, then physical unit c
       sellingPriceBasisUnit: 'Cx',
       sellingPriceAutoFilled: false,
     };
-    const { countedItems } = tallyStockCountRows([row]);
+    const { countedItems } = tallyStockCountRows([row], undefined, () => TXILAR_CX_UN);
     assert.equal(countedItems[0].unit, 'Un');
     assert.equal(countedItems[0].sellingPrice, 480);
     assert.equal(countedItems[0].sellingPriceBasisUnit, 'Cx');
+    // The dangerous sequence is now also VALUED correctly: 5 Un × (480/Cx ÷ 24) = 100, never 2,400.
+    assert.equal(countedItems[0].sellingValue, 100);
 
     const { items } = normalizeStockCountItems([
       { productName: 'Txilar', quantity: '5', unit: 'Un', costPrice: '0', sellingPrice: '480', sellingPriceBasisUnit: 'Cx' },

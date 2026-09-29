@@ -283,7 +283,7 @@ describe('F — validation path, persistence, Mode A, and valuation are untouche
     assert.equal((section.match(/group\.displayAggregateValue/g) ?? []).length >= 1, true);
     assert.doesNotMatch(section, /\* sellingPriceNum/);
     const grouped = src('apps/tenant/src/lib/periodicContagemGroupedView.ts');
-    assert.match(grouped, /sum \+ numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
+    assert.match(grouped, /row\.sellingValue !== undefined\s*\?\s*row\.sellingValue \?\? 0\s*:\s*numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
   });
 
   it('deriveModeAPortionValuations and applyModeAToGroup (Mode A\'s write-back path) are not referenced in the validated section', () => {

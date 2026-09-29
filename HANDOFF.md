@@ -43,5 +43,15 @@ bundle) checks color-mix, CSSPropertyRule (@property), crypto.randomUUID, Indexe
 "Continuar mesmo assim" (session dismiss). Supported floor: iOS/Safari 16.4+, Chrome 111+, Firefox 128+ (Tailwind v4).
 Test: tests/outdated-browser-notice.test.ts runs the script against simulated browsers.
 
+**Also (this session): Contagem valuation — price unit ≠ counted unit.** A deliberate price keeps its own
+`sellingPriceBasisUnit` when the counted unit changes (Rule 2); values were quantity × price regardless (5 Un @ 480/Cx
+= 2,400 instead of 100). Now one rule everywhere — `resolveSellingPricePerCountedUnit` (utils/stockCount.ts) converts
+via the product's unit relationship; unconvertible → not valued ("Rever preço"), validation and "Rever e Confirmar"
+blocked with the product named. `tallyStockCountRows(rows, costBasis, relationshipFor)`; tally item `sellingValue` is
+passed to `recordStockCount` and used as-is by `normalizeStockCountItems` (snapshot = what the operator saw). Group
+list uses entry `sellingValue`. Review screen lists "Não contados" names (5 inline + "Ver todos").
+Test: tests/contagem-valuation-price-unit.test.ts. **Pending discussion with Owner:** live total counting only
+validated rows, and saving to the server only on "Validar" (no-data-loss analysis given in chat).
+
 **Next:** optional mobile layout for the live total (bottom bar on phones; shrink main nav on scroll) — Owner has
 not decided.

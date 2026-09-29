@@ -383,7 +383,7 @@ describe('Corrigir (Decision 40 FR-N11; Implementation Authorization §1 item 7,
   it('handleRequestConfirmation tags manual rows with their own array index (rowsForTally), without modifying allWorkingRows itself', () => {
     const body = extractFunctionBody(source, 'const handleRequestConfirmation = async (e: React.FormEvent) => {');
     assert.match(body, /manualRows\.map\(\(row, idx\) => \(\{ \.\.\.row, manualRowIndex: idx \}\)\)/);
-    assert.match(body, /tallyStockCountRows\(rowsForTally, effectiveCostBasisByProductName\)/);
+    assert.match(body, /tallyStockCountRows\(rowsForTally, effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName\)/);
     // [Bug fix — per-product independent draft persistence] The
     // identity write immediately below no longer reads allWorkingRows
     // at all (it builds a rowKey-keyed map directly from catalogRows/

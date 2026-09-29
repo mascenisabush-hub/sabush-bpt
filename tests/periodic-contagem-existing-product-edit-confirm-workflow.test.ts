@@ -325,7 +325,7 @@ describe('K — Existing calculation/valuation paths are completely untouched by
     // row's own rowSellingValue — a differently-named but equally
     // pre-existing sibling expression, unaffected by this workflow).
     const grouped = readFileSync(new URL('../apps/tenant/src/lib/periodicContagemGroupedView.ts', import.meta.url), 'utf-8');
-    assert.match(grouped, /sum \+ numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
+    assert.match(grouped, /row\.sellingValue !== undefined\s*\?\s*row\.sellingValue \?\? 0\s*:\s*numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
     assert.match(periodicSrc, /formatCurrency\(group\.displayAggregateValue, currencySymbol\)/);
   });
 });

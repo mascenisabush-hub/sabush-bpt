@@ -459,7 +459,7 @@ describe('L — Sorting (Authorization §8): four modes, using only existing dat
     assert.notEqual(sortedStart, -1);
     assert.match(periodicSrc.slice(sortedStart, sortedStart + 1500), /sortByValidatedMode|sortGroups/);
     const grouped = readFileSync(new URL('../apps/tenant/src/lib/periodicContagemGroupedView.ts', import.meta.url), 'utf-8');
-    assert.match(grouped, /sum \+ numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
+    assert.match(grouped, /row\.sellingValue !== undefined\s*\?\s*row\.sellingValue \?\? 0\s*:\s*numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
   });
 
   it('a single <select> control drives validatedSortMode with exactly the four required options — one shared control for the one shared list, rather than the old validated-only control', () => {

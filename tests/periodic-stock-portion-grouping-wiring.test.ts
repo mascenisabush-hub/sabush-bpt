@@ -145,7 +145,7 @@ describe('PeriodicStockCountView.tsx — requirement: draft/finalization pipelin
     // called with the SAME allWorkingRows as its first argument; only
     // the label of the second argument changed to reflect that it is
     // now a merged, not catalog-only, cost basis source.
-    assert.match(source, /tallyStockCountRows\(allWorkingRows, effectiveCostBasisByProductName\)/);
+    assert.match(source, /tallyStockCountRows\(allWorkingRows, effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName\)/);
   });
 
   it('does not introduce any new "expected"/second valuation field anywhere in the view', () => {

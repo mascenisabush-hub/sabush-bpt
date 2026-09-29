@@ -27,6 +27,30 @@
 // authoritative-cost-basis and fallback rules this delegates to.
 import type { ProductCostBasis } from '../lib/fr67CostBasisConversion';
 import { deriveCostContribution } from '../lib/fr67CostBasisConversion';
+import { computeRatePerPurchaseUnit } from '../lib/purchaseToSellingConversion';
+import type { UnitRelationship } from '../types';
+
+// [Bug fix — Owner-approved, 2026-09-29] A deliberately entered selling
+// price keeps its own basis unit when the row's counted unit later
+// changes (Quantity/Selling-Unit Independence, Rule 2 — e.g. 480 per Cx
+// while 5 Un are counted). Valuing such a row as quantity × price
+// multiplied Un by a per-Cx price (5 × 480 = 2,400 instead of 100). This
+// returns the price per ONE counted unit: the price itself when the basis
+// is absent or the same unit; otherwise converted through the product's
+// confirmed unit relationship; null when no conversion is known (the row
+// cannot be valued and must not be counted until its price is fixed).
+export function resolveSellingPricePerCountedUnit(
+  countedUnit: string,
+  sellingPriceBasisUnit: string | undefined,
+  sellingPrice: number,
+  relationship: UnitRelationship | undefined | null
+): number | null {
+  const counted = (countedUnit || '').trim().toLowerCase();
+  const basis = (sellingPriceBasisUnit || '').trim().toLowerCase();
+  if (!basis || basis === counted) return sellingPrice;
+  const rate = computeRatePerPurchaseUnit(relationship, countedUnit.trim(), (sellingPriceBasisUnit as string).trim(), sellingPrice);
+  return rate !== null && Number.isFinite(rate) ? rate : null;
+}
 
 // [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
 // §2 item 1] `totalSellingValue` (quantity * sellingPrice, summed) is
@@ -46,6 +70,11 @@ import { deriveCostContribution } from '../lib/fr67CostBasisConversion';
 // note).
 
 export interface StockCountInputItem {
+  // [Bug fix] The row's selling value exactly as valued (and shown) during
+  // the Contagem — quantity × price per counted unit (see
+  // resolveSellingPricePerCountedUnit). When present it is used as-is,
+  // so the snapshot records the same value the operator saw.
+  sellingValue?: number;
   productName: string;
   quantity: number | string;
   unit?: string;
@@ -147,7 +176,10 @@ export function normalizeStockCountItems(
     const basis = costBasisByProductName?.get(trimmedName.toLowerCase());
     const { value: costContribution, derived: costBasisEstablished } = deriveCostContribution(quantity, unit, costPrice, basis);
     const itemTotal = Number(costContribution.toFixed(2));
-    const itemSellingTotal = Number((quantity * sellingPrice).toFixed(2));
+    const itemSellingTotal =
+      typeof raw.sellingValue === 'number' && Number.isFinite(raw.sellingValue)
+        ? Number(raw.sellingValue.toFixed(2))
+        : Number((quantity * sellingPrice).toFixed(2));
     totalValue += itemTotal;
     totalSellingValue += itemSellingTotal;
 
@@ -452,6 +484,10 @@ export interface StockCountTallyItem {
 export interface StockCountTallyResult {
   countedItems: StockCountTallyItem[];
   notCountedProductNames: string[];
+  // Rows with a quantity and a price whose price unit differs from the
+  // counted unit with no known conversion — left out of every total
+  // (also listed in notCountedProductNames) until the price is fixed.
+  unconvertiblePriceProductNames: string[];
   totalPhysicalUnits: number;
   totalPurchaseValue: number;
   totalSellingValue: number;
@@ -483,10 +519,14 @@ export function tallyStockCountRows(
   // exactly what this correction's own governing instruction forbids
   // absent strict necessity. Threading it as a separate, un-persisted
   // parameter avoids that entirely.
-  costBasisByProductName?: Map<string, ProductCostBasis>
+  costBasisByProductName?: Map<string, ProductCostBasis>,
+  // Resolves a product's confirmed unit relationship by name, used only to
+  // convert a price whose basis unit differs from the counted unit.
+  relationshipForProductName?: (productName: string) => UnitRelationship | undefined
 ): StockCountTallyResult {
   const countedItems: StockCountTallyItem[] = [];
   const notCountedProductNames: string[] = [];
+  const unconvertiblePriceProductNames: string[] = [];
   let totalPhysicalUnits = 0;
   let totalPurchaseValue = 0;
   let totalSellingValue = 0;
@@ -538,7 +578,18 @@ export function tallyStockCountRows(
     const basis = costBasisByProductName?.get(trimmedName.toLowerCase());
     const { value: costContribution, derived: costBasisEstablished } = deriveCostContribution(quantity, unit, costPrice, basis);
     const purchaseValue = Number(costContribution.toFixed(2));
-    const sellingValue = Number((quantity * sellingPrice).toFixed(2));
+    const pricePerCountedUnit = resolveSellingPricePerCountedUnit(
+      unit,
+      row.sellingPriceBasisUnit,
+      sellingPrice,
+      relationshipForProductName?.(trimmedName)
+    );
+    if (pricePerCountedUnit === null) {
+      notCountedProductNames.push(trimmedName);
+      unconvertiblePriceProductNames.push(trimmedName);
+      continue;
+    }
+    const sellingValue = Number((quantity * pricePerCountedUnit).toFixed(2));
 
     countedItems.push({
       productName: trimmedName,
@@ -580,6 +631,7 @@ export function tallyStockCountRows(
   return {
     countedItems,
     notCountedProductNames,
+    unconvertiblePriceProductNames,
     totalPhysicalUnits: Number(totalPhysicalUnits.toFixed(2)),
     totalPurchaseValue: Number(totalPurchaseValue.toFixed(2)),
     totalSellingValue: Number(totalSellingValue.toFixed(2)),

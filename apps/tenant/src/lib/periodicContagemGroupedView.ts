@@ -22,6 +22,11 @@ export interface GroupableUnifiedEntry extends IdentifiableGroupableRow {
   quantity: string;
   unit: string;
   sellingPrice: string;
+  // [Bug fix] The row's value as valued on the Contagem screen (quantity ×
+  // price per COUNTED unit — resolveSellingPricePerCountedUnit). null =
+  // price unit cannot be converted (contributes 0). When omitted, the
+  // plain quantity × sellingPrice applies (callers without unit context).
+  sellingValue?: number | null;
   validated: boolean;
   activationKey: string;
   isConflicted: boolean;
@@ -82,7 +87,11 @@ export function buildProductDisplayGroups(entries: GroupableUnifiedEntry[]): Pro
     };
 
     const displayAggregateValue = group.rows.reduce(
-      (sum, row) => sum + numericQuantity(row) * (Number(row.sellingPrice) || 0),
+      (sum, row) =>
+        sum +
+        (row.sellingValue !== undefined
+          ? row.sellingValue ?? 0
+          : numericQuantity(row) * (Number(row.sellingPrice) || 0)),
       0
     );
 

@@ -416,10 +416,10 @@ describe('J — catalog and manual paths both retain Qtd/Unid/Venda-Un/Valor', (
   });
 
   it('the Selling Value calculation is unchanged in both loops', () => {
-    assert.match(periodicSrc, /\{isBlank \? 'Não contado' : formatCurrency\(rowSellingValue, currencySymbol\)\}/);
+    assert.match(periodicSrc, /\{isBlank \? 'Não contado' : rowSellingValueOrNull === null \? 'Rever preço' : formatCurrency\(rowSellingValue, currencySymbol\)\}/);
     assert.match(
       periodicSrc,
-      /formatCurrency\(\s*\(Number\(row\.quantity\) \|\| 0\) \* \(Number\(row\.sellingPrice\) \|\| 0\),\s*currencySymbol\s*\)/
+      /formatCurrency\(\s*rowSellingValueFor\(row\) as number,\s*currencySymbol\s*\)/
     );
   });
 });
@@ -460,7 +460,7 @@ describe('K — Validar/Editar workflow unchanged', () => {
 // ---------------------------------------------------------------------
 describe('L — no calculation/business-logic code altered', () => {
   it('rowSellingValue\'s own derivation is byte-identical to before', () => {
-    assert.match(periodicSrc, /const rowSellingValue = q \* \(Number\(row\.sellingPrice\) \|\| 0\);/);
+    assert.match(periodicSrc, /const rowSellingValueOrNull = rowSellingValueFor\(row\);\s*\n\s*const rowSellingValue = rowSellingValueOrNull \?\? 0;/);
   });
 
   it('applyModeAToGroup / handleReferenceConfigChange / deriveModeAPortionValuations are untouched (Mode A calculation engine)', () => {

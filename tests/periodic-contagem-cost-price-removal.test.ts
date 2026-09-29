@@ -330,13 +330,13 @@ describe('Issue 2 — Periodic Contagem live Selling-Price readability', () => {
   });
 
   it('the catalog-row Selling Value figure is still rendered via formatCurrency(rowSellingValue, currencySymbol) — calculation untouched', () => {
-    assert.match(periodicSrc, /\{isBlank \? 'Não contado' : formatCurrency\(rowSellingValue, currencySymbol\)\}/);
+    assert.match(periodicSrc, /\{isBlank \? 'Não contado' : rowSellingValueOrNull === null \? 'Rever preço' : formatCurrency\(rowSellingValue, currencySymbol\)\}/);
   });
 
   it('the manual-row Selling Value figure is still quantity × sellingPrice — calculation untouched', () => {
     assert.match(
       periodicSrc,
-      /formatCurrency\(\s*\(Number\(row\.quantity\) \|\| 0\) \* \(Number\(row\.sellingPrice\) \|\| 0\),\s*currencySymbol\s*\)/
+      /formatCurrency\(\s*rowSellingValueFor\(row\) as number,\s*currencySymbol\s*\)/
     );
   });
 });

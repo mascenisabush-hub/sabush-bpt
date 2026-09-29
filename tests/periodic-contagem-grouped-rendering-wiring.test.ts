@@ -20,7 +20,7 @@ const componentSource = readFileSync(
 
 describe('Data pipeline — groups built before filtering, reusing Step 1/2 modules directly', () => {
   it('groupableUnifiedEntries augments each entry with productId/isConflicted/persistenceState, reusing the identical conflict-key convention already established', () => {
-    const fnMatch = componentSource.match(/const groupableUnifiedEntries = useMemo\(\s*\n\s*\(\) =>[\s\S]*?\n    \[unifiedListEntries, periodicStockDraftItemsByKey, manualRows, ambiguousMigrationKeys, manualRowSaveError, persistenceStateTick\]\s*\n  \);/);
+    const fnMatch = componentSource.match(/const groupableUnifiedEntries = useMemo\(\s*\n\s*\(\) =>[\s\S]*?\n    \[unifiedListEntries, periodicStockDraftItemsByKey, manualRows, catalogRows, newProductInfo, products, ambiguousMigrationKeys, manualRowSaveError, persistenceStateTick\]\s*\n  \);/);
     assert.ok(fnMatch, 'expected groupableUnifiedEntries to exist');
     assert.match(fnMatch![0], /entry\.kind === 'catalog' \? `catalog:\$\{entry\.catalogProductId\}` : entry\.sourceRowKey \?\? `manual:\$\{entry\.manualRowIndex\}`/);
   });
@@ -170,7 +170,7 @@ describe('21. Adding/removing a member updates the correct group without identit
   });
 
   it('the grouped pipeline recomputes on every relevant dependency change — a newly added or removed member is picked up automatically via React\'s own useMemo re-evaluation, not a manual refresh', () => {
-    assert.match(componentSource, /\[unifiedListEntries, periodicStockDraftItemsByKey, manualRows, ambiguousMigrationKeys, manualRowSaveError, persistenceStateTick\]/);
+    assert.match(componentSource, /\[unifiedListEntries, periodicStockDraftItemsByKey, manualRows, catalogRows, newProductInfo, products, ambiguousMigrationKeys, manualRowSaveError, persistenceStateTick\]/);
   });
 });
 

@@ -5,7 +5,7 @@ import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatt
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { StockCount, StockCountItem, StockCountType, PeriodicStockDraft, PeriodicStockDraftItem, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
-import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyItem, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
+import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyItem, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow, resolveSellingPricePerCountedUnit } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 // [Product Identity Existing/New Resolution — Implementation
 // Authorization, Checkpoint C] Reused, UNMODIFIED, exactly as
@@ -86,6 +86,7 @@ import {
   identityCheckNotRunMessage,
   identityCheckPendingMessage,
   unresolvedRecoveryEvidenceMessage,
+  formatProductNames,
   unsafeRowsMessage,
 } from '../lib/periodicFinalizationGateMessages';
 // [Feature — optional local download of a confirmed Contagem]
@@ -3023,6 +3024,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (!Number.isFinite(selling) || selling <= 0) {
       return 'Introduza um preço de venda válido, maior que zero.';
     }
+    if (pricePerCountedUnitFor(row) === null) {
+      const basis = (row.sellingPriceBasisUnit ?? '').trim();
+      const counted = row.unit.trim();
+      return `O preço está por ${basis} mas a quantidade está em ${counted} — introduza o preço por ${counted}.`;
+    }
     return null;
   };
 
@@ -5190,9 +5196,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // (imported below) is unaffected and remains fully in use by
   // liveTally/tallyStockCountRows for the real, governed totals.
 
+  // [Bug fix — Owner-approved, 2026-09-29] One valuation rule for every
+  // figure on this screen, the live total and the snapshot: quantity ×
+  // price per COUNTED unit (resolveSellingPricePerCountedUnit). A
+  // deliberately entered price keeps its own unit when the counted unit
+  // changes (e.g. 480 per Cx, 5 Un counted); it is converted through the
+  // product's unit relationship, or — when no conversion is known — the
+  // row is not valued (null → "Rever preço") and cannot be validated.
+  const pricePerCountedUnitFor = (row: StockCountWorkingRow): number | null =>
+    resolveSellingPricePerCountedUnit(
+      row.unit.trim() || 'un',
+      row.sellingPriceBasisUnit,
+      Number(row.sellingPrice) || 0,
+      getEffectiveUnitRelationshipForProductName(row.productName.trim())
+    );
+  const rowSellingValueFor = (row: StockCountWorkingRow): number | null => {
+    const price = pricePerCountedUnitFor(row);
+    return price === null ? null : (Number(row.quantity) || 0) * price;
+  };
+
   const liveTally = useMemo(
-    () => tallyStockCountRows(allWorkingRows, effectiveCostBasisByProductName),
-    [allWorkingRows, effectiveCostBasisByProductName]
+    () => tallyStockCountRows(allWorkingRows, effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName),
+    // getEffectiveUnitRelationshipForProductName reads newProductInfo and
+    // the catalog; both are listed so a relationship change re-values.
+    [allWorkingRows, effectiveCostBasisByProductName, newProductInfo, products]
   );
 
   // [Increment B, Checkpoint B6 — Consolidated Specification §17] Purely
@@ -5853,16 +5880,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           saveError: hasRetryExhaustedError || hasIndexedSaveError ? 'save-error' : undefined,
           isBlockedPendingReview: ambiguousMigrationKeys.includes(conflictKey),
         });
+        const sourceRow =
+          entry.kind === 'catalog'
+            ? entry.catalogProductId
+              ? catalogRows[entry.catalogProductId]
+              : undefined
+            : entry.manualRowIndex !== null
+              ? manualRows[entry.manualRowIndex]
+              : undefined;
         return {
           ...entry,
           id: entry.rowKey,
           productId,
           isConflicted,
           persistenceState,
+          // Same valuation rule as every other figure on this screen.
+          sellingValue: sourceRow && entry.quantity.trim() !== '' ? rowSellingValueFor(sourceRow) : undefined,
         };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [unifiedListEntries, periodicStockDraftItemsByKey, manualRows, ambiguousMigrationKeys, manualRowSaveError, persistenceStateTick]
+    [unifiedListEntries, periodicStockDraftItemsByKey, manualRows, catalogRows, newProductInfo, products, ambiguousMigrationKeys, manualRowSaveError, persistenceStateTick]
   );
 
   // [CONTAGEM — Always-Visible Live Total + Last Entered Product]
@@ -6503,7 +6540,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         quantityLabel: hasStarted ? String(q) : '—',
         unitLabel: hasStarted ? row.unit || 'un' : '—',
         priceLabel: hasStarted ? formatCurrency(sellingPriceNum, currencySymbol) : '—',
-        totalValue: hasStarted ? q * sellingPriceNum : 0,
+        totalValue: hasStarted ? rowSellingValueFor(row) ?? 0 : 0,
         hasData: hasStarted,
       };
     });
@@ -6511,7 +6548,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       const groupRows = group.rows.map((r) => manualRows[r.idx]).filter((r): r is StockCountWorkingRow => r !== undefined);
       const startedRows = groupRows.filter((r) => r.quantity.trim() !== '');
       const anyStarted = startedRows.length > 0;
-      const totalValue = startedRows.reduce((sum, r) => sum + (Number(r.quantity) || 0) * (Number(r.sellingPrice) || 0), 0);
+      const totalValue = startedRows.reduce((sum, r) => sum + (rowSellingValueFor(r) ?? 0), 0);
       if (groupRows.length === 1) {
         const soleRow = groupRows[0];
         const hasStarted = soleRow.quantity.trim() !== '';
@@ -6525,7 +6562,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           quantityLabel: hasStarted ? String(q) : '—',
           unitLabel: hasStarted ? soleRow.unit || 'un' : '—',
           priceLabel: hasStarted ? formatCurrency(sellingPriceNum, currencySymbol) : '—',
-          totalValue: hasStarted ? q * sellingPriceNum : 0,
+          totalValue: hasStarted ? rowSellingValueFor(soleRow) ?? 0 : 0,
           hasData: hasStarted,
         };
       }
@@ -6851,7 +6888,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       ...Object.values(catalogRows),
       ...manualRows.map((row, idx) => ({ ...row, manualRowIndex: idx })),
     ];
-    const tally = tallyStockCountRows(rowsForTally, effectiveCostBasisByProductName);
+    const tally = tallyStockCountRows(rowsForTally, effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName);
+    if (tally.unconvertiblePriceProductNames.length > 0) {
+      setError(
+        `O preço de ${formatProductNames(tally.unconvertiblePriceProductNames)} está numa unidade diferente da quantidade contada e não há conversão conhecida — corrija o preço antes de confirmar.`
+      );
+      return;
+    }
     if (tally.countedItems.length === 0) {
       setError('Introduza a quantidade física de pelo menos um produto antes de confirmar.');
       return;
@@ -7343,6 +7386,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           // (stockCount.ts) — see StockCountItem.sellingPriceBasisUnit's
           // own comment (types.ts) for the full rationale.
           sellingPriceBasisUnit: item.sellingPriceBasisUnit,
+          // The exact value valued and shown during the Contagem (price per
+          // counted unit) — recorded as-is in the snapshot.
+          sellingValue: item.sellingValue,
           // [Product Memory / UOM — Increment A, Checkpoint 2c]
           ...(unitRelationshipByProductName.has(item.productName.trim().toLowerCase())
             ? { unitRelationship: unitRelationshipByProductName.get(item.productName.trim().toLowerCase())! }
@@ -8129,10 +8175,43 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           {pendingTally.notCountedProductNames.length > 0 && (
             <div className="bg-amber-50/60 border border-amber-100 rounded-xl px-4 py-3 flex items-start gap-2.5">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
-              <p className="text-[13px] leading-relaxed text-amber-800">
-                Esta será uma contagem <strong>parcial</strong>. Os produtos não contados não entram no total nem
-                recebem quantidade zero — não presuma que ficaram sem stock.
-              </p>
+              <div className="min-w-0">
+                <p className="text-[13px] leading-relaxed text-amber-800">
+                  Esta será uma contagem <strong>parcial</strong>. Os produtos não contados não entram no total nem
+                  recebem quantidade zero — não presuma que ficaram sem stock.
+                </p>
+                {/* [Owner-requested] Name the products left out, so a
+                    forgotten product is noticed before confirming. De-
+                    duplicated (a product can have several blank portions). */}
+                {(() => {
+                  const seen = new Set<string>();
+                  const names = pendingTally.notCountedProductNames.filter((name) => {
+                    const key = name.trim().toLowerCase();
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                  });
+                  return (
+                    <>
+                      <p className="text-[13px] leading-relaxed text-amber-900 mt-1.5">
+                        <span className="font-semibold">Não contados:</span> {formatProductNames(names)}
+                      </p>
+                      {names.length > 5 && (
+                        <details className="mt-1.5">
+                          <summary className="text-[12px] font-semibold text-amber-800 cursor-pointer select-none">
+                            Ver todos ({names.length})
+                          </summary>
+                          <ul className="mt-1.5 max-h-48 overflow-y-auto text-[12px] text-amber-900 list-disc pl-5 space-y-0.5">
+                            {names.map((name) => (
+                              <li key={name.trim().toLowerCase()}>{name.trim() || '(sem nome)'}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           )}
 
@@ -9448,7 +9527,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     // sellingPrice values that flow through the
                     // EXISTING, UNMODIFIED path" — Mode A and Mode B are
                     // indistinguishable from this point on, by design).
-                    const rowSellingValue = q * (Number(row.sellingPrice) || 0);
+                    const rowSellingValueOrNull = rowSellingValueFor(row);
+                    const rowSellingValue = rowSellingValueOrNull ?? 0;
                     const portionLabel = portionLabels.get(productId) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
                     // [Business Worth Evolution — Increment 4] Extracted
                     // as its own named boolean, rather than repeating a
@@ -9822,7 +9902,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 isBlank ? 'bg-amber-50 text-amber-600' : 'bg-[#F6EFD9] text-[#633806]'
                               }`}
                             >
-                              {isBlank ? 'Não contado' : formatCurrency(rowSellingValue, currencySymbol)}
+                              {isBlank ? 'Não contado' : rowSellingValueOrNull === null ? 'Rever preço' : formatCurrency(rowSellingValue, currencySymbol)}
                             </div>
                             {/* [Feature — per-row Save + confirm] Shown
                                 right on the row the moment Save fails
@@ -10428,8 +10508,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   >
                                     {row.quantity.trim() === ''
                                       ? 'Não contado'
+                                      : rowSellingValueFor(row) === null
+                                      ? 'Rever preço'
                                       : formatCurrency(
-                                          (Number(row.quantity) || 0) * (Number(row.sellingPrice) || 0),
+                                          rowSellingValueFor(row) as number,
                                           currencySymbol
                                         )}
                                   </div>

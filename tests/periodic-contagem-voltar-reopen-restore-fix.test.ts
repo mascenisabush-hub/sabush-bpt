@@ -237,7 +237,7 @@ describe('F — Total value in the unified list is no longer squeezed alongside 
     // Per-portion quantity * sellingPrice, summed once in
     // periodicContagemGroupedView.ts (presentation only).
     const grouped = readFileSync(new URL('../apps/tenant/src/lib/periodicContagemGroupedView.ts', import.meta.url), 'utf-8');
-    assert.match(grouped, /sum \+ numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
+    assert.match(grouped, /row\.sellingValue !== undefined\s*\?\s*row\.sellingValue \?\? 0\s*:\s*numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
     assert.match(periodicSrc, /formatCurrency\(group\.displayAggregateValue, currencySymbol\)/);
   });
 
