@@ -567,34 +567,29 @@ describe('Decisions 44-56 — firestore.rules', () => {
 // regression technique as every describe block in this file — proves
 // clearAllData() no longer attempts to delete stockCounts at all, and
 // that every unrelated category it deletes is unchanged.
-describe('Decision 57 — Clear-All-Data no longer deletes stockCounts (Option B)', () => {
-  const fnMatch = contextSource.match(/const clearAllData = async \(\) => \{[\s\S]*?\n  \};/);
-
-  it('clearAllData exists and was found for the assertions below', () => {
-    assert.ok(fnMatch, 'expected to find clearAllData');
+describe('Decision 57 — clients can never delete stockCounts; only the password-protected server reset can (Owner decision 2026-09-29)', () => {
+  // [Business Data Reset, Owner-requested 2026-09-29] The old client-side
+  // clearAllData (which kept finalized Contagem history under Decision 57
+  // Option B) is replaced by the server-side, password-protected reset
+  // (server/businessDataReset.ts). By the Owner's explicit instruction the
+  // reset's "Tudo" and "Stock e contagens" options DO erase finalized
+  // Contagem history. What remains true from Decision 57: no browser code
+  // path deletes stockCounts, and firestore.rules forbid it outright.
+  it('the client-side clearAllData no longer exists', () => {
+    assert.doesNotMatch(contextSource, /const clearAllData = async/);
   });
 
-  it('clearAllData() contains no stockCounts deletion call of any kind', () => {
-    assert.doesNotMatch(fnMatch![0], /deleteDoc\([^)]*'stockCounts'/);
-    assert.doesNotMatch(fnMatch![0], /for \(const \w+ of stockCounts\)/);
+  it('no client code deletes a stockCounts document', () => {
+    assert.doesNotMatch(contextSource, /deleteDoc\([^)]*'stockCounts'/);
   });
 
-  it('clearAllData() does not reference the stockCounts collection at all anymore', () => {
-    assert.doesNotMatch(fnMatch![0], /'stockCounts'/);
+  it('stockCounts are erased only by the server reset, and only when its stock area is chosen', () => {
+    const resetModule = readFileSync(new URL('../server/businessDataReset.ts', import.meta.url), 'utf-8');
+    assert.match(resetModule, /stock: \[[\s\S]*?'stockCounts',[\s\S]*?\],/);
+    assert.match(contextSource, /fetch\('\/api\/business\/data-reset'/);
   });
 
-  it('every unrelated Clear-All-Data deletion category is unchanged — products, batches, purchaseBatches, quebras, expenses, withdrawals, timelineEvents, and the initial stockCountDrafts working draft', () => {
-    assert.match(fnMatch![0], /for \(const p of products\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'products', p\.id\)\);/);
-    assert.match(fnMatch![0], /for \(const b of batches\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'batches', b\.id\)\);/);
-    assert.match(fnMatch![0], /for \(const pb of purchaseBatches\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'purchaseBatches', pb\.id\)\);/);
-    assert.match(fnMatch![0], /for \(const q of quebras\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'quebras', q\.id\)\);/);
-    assert.match(fnMatch![0], /for \(const e of expenses\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'expenses', e\.id\)\);/);
-    assert.match(fnMatch![0], /for \(const w of withdrawals\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'withdrawals', w\.id\)\);/);
-    assert.match(fnMatch![0], /for \(const t of timelineEvents\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'timelineEvents', t\.id\)\);/);
-    assert.match(fnMatch![0], /await deleteDoc\(doc\(db, 'businesses', businessId, 'stockCountDrafts', 'initial'\)\)\.catch/);
-  });
-
-  it('firestore.rules independently guarantees the same outcome even if a future edit reintroduced the loop — delete is unconditionally false, not merely absent from this one call site', () => {
+  it('firestore.rules independently guarantees no client can delete a stockCount — delete is unconditionally false', () => {
     assert.match(rulesSource, /allow update: if false;\s*\n\s*allow delete: if false;/);
   });
 });

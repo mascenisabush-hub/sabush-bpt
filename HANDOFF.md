@@ -73,5 +73,14 @@ inside the list). Test: tests/contagem-editing-space-layout.test.ts.
 the confirm gate and `confirmedNewProduct` on saved items (recordStockCount already skipped the check for an empty
 catalog). Test: tests/contagem-empty-catalog-no-identity-question.test.ts.
 
+**Also (this session): Business Data Reset ("Repor dados").** Settings → always visible to Owner/Admin →
+BusinessDataResetModal (set password if none — never deletes; choose Tudo or areas; password + type APAGAR).
+Server-only: POST /api/business/data-reset → verifyOwnerOnlyAction → checkClearDataPassword (shared with /verify, same
+lockout) → executeBusinessDataReset (server/businessDataReset.ts: area→collections map, catalog⇒stock⇒worth,
+NEVER_DELETED staff/payments/private/support*, recursiveDelete, clears business.currentWorth) → platform_audit_log
+`business.data_reset`. Client clearAllData removed. **Decision 57 (keep finalized Contagem history on clear-all) is
+superseded by the Owner's explicit instruction** for Tudo/Stock; clients still cannot delete stockCounts (rules).
+Test: tests/business-data-reset.test.ts (incl. "every rules collection is classified").
+
 **Next:** optional mobile layout for the live total (bottom bar on phones; shrink main nav on scroll) — Owner has
 not decided.

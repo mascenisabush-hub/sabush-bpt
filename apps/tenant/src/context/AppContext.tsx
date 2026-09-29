@@ -1256,7 +1256,14 @@ interface AppContextType {
   refreshShopWorth: (businessId: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   loadSampleData: () => Promise<void>;
-  clearAllData: () => Promise<void>;
+  // [Business Data Reset, 2026-09-29] Server-side reset of the chosen areas
+  // (or everything), protected by the business's reset password. Replaces
+  // the old client-side clearAllData, which could not delete counts or
+  // Business Worth snapshots (immutable for clients) and could stop half-way.
+  resetBusinessData: (
+    password: string,
+    scopes: Array<'all' | 'catalog' | 'stock' | 'cash' | 'worth'>
+  ) => Promise<{ scopes: string[]; deletedCounts: Record<string, number>; clearedCurrentWorth: boolean }>;
   // Clear-Data Password gate (Settings → "Limpar Todos os Dados").
   // A dedicated password, separate from the owner's login password,
   // required before clearAllData() above may be invoked. Server-backed
@@ -9955,71 +9962,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return await _clearDataPasswordRequest('verify', { password });
   };
 
-  const clearAllData = async () => {
-    if (!activeBusinessId || !isOwner) return;
+  const resetBusinessData = async (
+    password: string,
+    scopes: Array<'all' | 'catalog' | 'stock' | 'cash' | 'worth'>
+  ): Promise<{ scopes: string[]; deletedCounts: Record<string, number>; clearedCurrentWorth: boolean }> => {
+    if (!activeBusinessId || !isOwner) throw new Error('Apenas o dono pode realizar esta ação.');
+    if (!currentUser) throw new Error('A sua sessão expirou. Inicie sessão novamente.');
     const businessId = activeBusinessId;
-
-    for (const p of products) {
-      await deleteDoc(doc(db, 'businesses', businessId, 'products', p.id));
+    const idToken = await currentUser.getIdToken();
+    let response: Response;
+    try {
+      response = await fetch('/api/business/data-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ businessId, password, scopes }),
+      });
+    } catch {
+      throw new Error('Sem ligação ao servidor. Verifique a sua internet e tente novamente.');
     }
-    for (const b of batches) {
-      await deleteDoc(doc(db, 'businesses', businessId, 'batches', b.id));
+    let responseBody: any = null;
+    try {
+      responseBody = await response.json();
+    } catch {
+      /* non-JSON error body */
     }
-    for (const pb of purchaseBatches) {
-      await deleteDoc(doc(db, 'businesses', businessId, 'purchaseBatches', pb.id));
+    if (!response.ok) {
+      throw new Error(responseBody?.message || 'Erro ao repor os dados. Tente novamente.');
     }
-    for (const q of quebras) {
-      await deleteDoc(doc(db, 'businesses', businessId, 'quebras', q.id));
+    // Local Contagem backups on this device would otherwise offer to
+    // "recover" rows that no longer exist on the server.
+    try {
+      const prefix = `contagem-pending:${businessId}:`;
+      const keys: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith(prefix)) keys.push(key);
+      }
+      keys.forEach((key) => window.localStorage.removeItem(key));
+    } catch {
+      /* storage unavailable — nothing to clear */
     }
-    for (const e of expenses) {
-      await deleteDoc(doc(db, 'businesses', businessId, 'expenses', e.id));
-    }
-    // [Decision 57 — Intentional Removal of Finalized Periodic Contagem
-    // History, Option B; Rule 8 §IV.O-n; Implementation Plan §14;
-    // Implementation Authorization (decision-57-clear-all-data-
-    // finalized-history-implementation-authorization.md) §3 item 2]
-    // "Clear All Data" no longer deletes any `stockCounts` document at
-    // all — previously this loop deleted every non-'initial' (i.e.
-    // finalized Periodic Contagem) document while skipping 'initial'
-    // only; `firestore.rules` now denies `delete` on `stockCounts`
-    // unconditionally (same commit), so this loop would fail on its
-    // very first non-'initial' iteration if left in place. Removed
-    // entirely rather than re-guarded, matching the identical pattern
-    // already established for Closings immediately below (Closing
-    // Integrity Amendment) and for Initial Stock Valuation History two
-    // comments down — a fully-immutable record type is not iterated at
-    // all here, not looped-and-caught. Any future, separately governed
-    // intentional-removal capability (left entirely undecided by
-    // Decision 57 §4/§7) is not this function's concern.
-    // [Initial Stock Valuation History] Same "no exceptions" immutability
-    // tier as the 'initial' StockCount itself (firestore.rules: allow
-    // delete: if false, unconditionally) — "Clear All Data" does not
-    // attempt to remove these either, for the same reason `stockCounts`
-    // itself is no longer touched above (Decision 57). Not iterated at
-    // all, matching that established pattern rather than looping and
-    // swallowing a guaranteed per-item failure.
-    // The draft (if any) is not itself Initial Capital, so it is still
-    // fully cleared by "Clear All Data" — no rule prevents this.
-    await deleteDoc(doc(db, 'businesses', businessId, 'stockCountDrafts', 'initial')).catch(() => {
-      // No draft existed — nothing to clean up, not an error.
-    });
-    for (const w of withdrawals) {
-      await deleteDoc(doc(db, 'businesses', businessId, 'withdrawals', w.id));
-    }
-    // [Closing Integrity Amendment v1.0] Closings can no longer be
-    // deleted at all (firestore.rules: allow delete: if false — a Closing
-    // is permanent, only ever superseded via reopenClosing). "Clear All
-    // Data" therefore no longer removes Closing or ClosedPeriod records —
-    // attempting to would simply fail against the rule. This is a real,
-    // deliberate behavior change from before this amendment (when
-    // deleteClosing did a plain deleteDoc) and is worth a product decision
-    // on whether "Limpar Todos os Dados" should still claim to wipe
-    // literally everything, or whether its copy should be updated to
-    // reflect that Closings now survive a reset by design — flagged here,
-    // not silently decided.
-    for (const t of timelineEvents) {
-      await deleteDoc(doc(db, 'businesses', businessId, 'timelineEvents', t.id));
-    }
+    return responseBody;
   };
 
   return (
@@ -10197,7 +10180,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshShopWorth,
         logout,
         loadSampleData,
-        clearAllData,
+        resetBusinessData,
         getClearDataPasswordStatus,
         setClearDataPassword,
         verifyClearDataPassword,

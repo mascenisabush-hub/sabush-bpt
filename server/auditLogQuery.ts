@@ -90,6 +90,9 @@ export const KNOWN_ACTION_TYPES = [
   'support_session.ended_by_support',
   'support_session.completed',
   'support_session.ended_by_abandonment',
+  // [Business Data Reset, 2026-09-29] Owner/Admin erased some or all of the
+  // business's data with the reset password (server/businessDataReset.ts).
+  'business.data_reset',
 ] as const;
 
 export type KnownActionType = (typeof KNOWN_ACTION_TYPES)[number];

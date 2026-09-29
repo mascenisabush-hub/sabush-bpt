@@ -22,7 +22,7 @@ import { fileURLToPath } from 'url';
 import { initializeApp, cert, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { backgroundWorker } from './backgroundWorker';
 import { resolveServiceMode, isTenantMode, createTenantOnlyMiddleware } from './serviceMode';
 import { createNotificationPlatform } from './notificationPlatform';
@@ -44,6 +44,7 @@ import { suspendBusiness, reactivateBusiness, type BusinessSuspensionDb } from '
 import { touchBusinessActivity, type ActivityTouchDb } from './activityTouch';
 import { queryBusinessDirectory, type BusinessDirectoryDb } from './businessDirectory';
 import { queryAuditLog, type AuditLogDb } from './auditLogQuery';
+import { executeBusinessDataReset, parseResetScopes, type ResetDbLike } from './businessDataReset';
 import { grantInitialStockRecoveryAuthorization, type InitialStockRecoveryAuthorizationDb } from './initialStockRecoveryAuthorization';
 import { grantBusinessWorthRecoveryAuthorization, type BusinessWorthRecoveryAuthorizationDb } from './businessWorthRecoveryAuthorization';
 import { consumeInitialStockRecoveryAuthorization, type InitialStockRecoveryConsumptionDb } from './initialStockRecoveryConsumption';
@@ -800,6 +801,49 @@ expressApp.post('/api/business/clear-data-password/set', tenantOnly, requireAuth
 // immutability guards on stockCounts/closings/etc.) that the client
 // only invokes after this returns { valid: true }.
 // ------------------------------------------------------------------
+// Shared by /clear-data-password/verify and /business/data-reset: checks
+// the business's reset password with the SAME lockout (5 failures → 15-min
+// lock). Callers must have passed verifyOwnerOnlyAction first.
+type ClearDataPasswordCheck =
+  | { outcome: 'valid' }
+  | { outcome: 'invalid'; attemptsRemaining: number }
+  | { outcome: 'error'; status: number; body: Record<string, unknown> };
+async function checkClearDataPassword(businessId: string, password: string): Promise<ClearDataPasswordCheck> {
+  const authDocRef = db.collection('businesses').doc(businessId).collection('private').doc('clearDataAuth');
+  const authDoc = await authDocRef.get();
+  const authData = authDoc.data();
+  if (!authDoc.exists || !authData?.passwordHash) {
+    return { outcome: 'error', status: 409, body: { error: 'not-configured', message: 'Nenhuma password de limpeza foi definida ainda.' } };
+  }
+  const now = Date.now();
+  const lockedUntil = authData.lockedUntil ? new Date(authData.lockedUntil).getTime() : 0;
+  if (lockedUntil && now < lockedUntil) {
+    const minutesLeft = Math.ceil((lockedUntil - now) / 60000);
+    return {
+      outcome: 'error',
+      status: 423,
+      body: {
+        error: 'locked',
+        message: `Demasiadas tentativas falhadas. Tente novamente em ${minutesLeft} minuto(s).`,
+        lockedUntil: authData.lockedUntil,
+      },
+    };
+  }
+  if (verifyClearDataPasswordHash(password, authData.passwordHash, authData.salt)) {
+    await authDocRef.update({ failedAttempts: 0, lockedUntil: null });
+    return { outcome: 'valid' };
+  }
+  const failedAttempts = (authData.failedAttempts || 0) + 1;
+  const update: Record<string, unknown> = { failedAttempts };
+  let attemptsRemaining = Math.max(0, CLEAR_DATA_LOCKOUT_MAX_ATTEMPTS - failedAttempts);
+  if (failedAttempts >= CLEAR_DATA_LOCKOUT_MAX_ATTEMPTS) {
+    update.lockedUntil = new Date(now + CLEAR_DATA_LOCKOUT_DURATION_MS).toISOString();
+    attemptsRemaining = 0;
+  }
+  await authDocRef.update(update);
+  return { outcome: 'invalid', attemptsRemaining };
+}
+
 expressApp.post('/api/business/clear-data-password/verify', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
   const requesterUid = req.callerUid!;
   const businessId = String(req.body?.businessId || '').trim();
@@ -817,44 +861,16 @@ expressApp.post('/api/business/clear-data-password/verify', tenantOnly, requireA
   }
 
   try {
-    const authDocRef = db.collection('businesses').doc(businessId).collection('private').doc('clearDataAuth');
-    const authDoc = await authDocRef.get();
-    const authData = authDoc.data();
-
-    if (!authDoc.exists || !authData?.passwordHash) {
-      res.status(409).json({ error: 'not-configured', message: 'Nenhuma password de limpeza foi definida ainda.' });
+    const check = await checkClearDataPassword(businessId, password);
+    if (check.outcome === 'error') {
+      res.status(check.status).json(check.body);
       return;
     }
-
-    const now = Date.now();
-    const lockedUntil = authData.lockedUntil ? new Date(authData.lockedUntil).getTime() : 0;
-    if (lockedUntil && now < lockedUntil) {
-      const minutesLeft = Math.ceil((lockedUntil - now) / 60000);
-      res.status(423).json({
-        error: 'locked',
-        message: `Demasiadas tentativas falhadas. Tente novamente em ${minutesLeft} minuto(s).`,
-        lockedUntil: authData.lockedUntil,
-      });
-      return;
-    }
-
-    const isValid = verifyClearDataPasswordHash(password, authData.passwordHash, authData.salt);
-
-    if (isValid) {
-      await authDocRef.update({ failedAttempts: 0, lockedUntil: null });
+    if (check.outcome === 'valid') {
       res.json({ valid: true });
       return;
     }
-
-    const failedAttempts = (authData.failedAttempts || 0) + 1;
-    const update: Record<string, unknown> = { failedAttempts };
-    let attemptsRemaining = Math.max(0, CLEAR_DATA_LOCKOUT_MAX_ATTEMPTS - failedAttempts);
-    if (failedAttempts >= CLEAR_DATA_LOCKOUT_MAX_ATTEMPTS) {
-      update.lockedUntil = new Date(now + CLEAR_DATA_LOCKOUT_DURATION_MS).toISOString();
-      attemptsRemaining = 0;
-    }
-    await authDocRef.update(update);
-    res.json({ valid: false, attemptsRemaining });
+    res.json({ valid: false, attemptsRemaining: check.attemptsRemaining });
   } catch (err) {
     console.error('[clear-data-password/verify] failed', { requesterUid, businessId, error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'internal', message: 'Não foi possível verificar a password.' });
@@ -865,6 +881,92 @@ expressApp.post('/api/business/clear-data-password/verify', tenantOnly, requireA
 // POST /api/staff/delete
 // Body: { staffUid: string, businessId: string, reason?: string }
 // ------------------------------------------------------------------
+// POST /api/business/data-reset
+// Body: { businessId: string, password: string, scopes: ResetScope[] }
+//
+// [Business Data Reset — Owner-requested, 2026-09-29] Owner/Admin only;
+// the business's reset password is checked IN THIS REQUEST (same lockout
+// as /verify), then the chosen areas are erased server-side (see
+// server/businessDataReset.ts for exactly what each area covers, its
+// dependencies, and what is never deleted). Every attempt that reaches the
+// deletion — successful or not — is written to platform_audit_log.
+expressApp.post('/api/business/data-reset', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
+  const requesterUid = req.callerUid!;
+  const businessId = String(req.body?.businessId || '').trim();
+  const password = String(req.body?.password || '');
+  const scopes = parseResetScopes(req.body?.scopes);
+
+  if (!businessId || !password || !scopes) {
+    res.status(400).json({ error: 'invalid-argument', message: 'businessId, password e as áreas a repor são obrigatórios.' });
+    return;
+  }
+
+  const permissionError = await verifyOwnerOnlyAction(requesterUid, businessId);
+  if (permissionError) {
+    res.status(permissionError.status).json(permissionError.body);
+    return;
+  }
+
+  let check: ClearDataPasswordCheck;
+  try {
+    check = await checkClearDataPassword(businessId, password);
+  } catch (err) {
+    console.error('[business/data-reset] password check failed', { requesterUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Não foi possível verificar a password.' });
+    return;
+  }
+  if (check.outcome === 'error') {
+    res.status(check.status).json(check.body);
+    return;
+  }
+  if (check.outcome === 'invalid') {
+    res.status(403).json({
+      error: 'wrong-password',
+      message: `Password incorreta. Tentativas restantes: ${check.attemptsRemaining}.`,
+      attemptsRemaining: check.attemptsRemaining,
+    });
+    return;
+  }
+
+  try {
+    const result = await executeBusinessDataReset(
+      db as unknown as ResetDbLike,
+      businessId,
+      scopes,
+      () => FieldValue.delete()
+    );
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: requesterUid,
+        actorRole: 'owner',
+        actionType: 'business.data_reset',
+        targetBusinessId: businessId,
+        justification: `Áreas: ${result.scopes.join(', ')}${scopes.includes('all') ? ' (tudo)' : ''}. Documentos apagados: ${JSON.stringify(result.deletedCounts)}`,
+      });
+    } catch (err) {
+      console.error('[business/data-reset] audit log write failed after a successful reset', { requesterUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    }
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[business/data-reset] reset failed', { requesterUid, businessId, scopes, error: err instanceof Error ? err.message : String(err) });
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: requesterUid,
+        actorRole: 'owner',
+        actionType: 'business.data_reset',
+        targetBusinessId: businessId,
+        justification: `FALHOU a meio (áreas pedidas: ${scopes.join(', ')}): ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } catch {
+      /* already logged above */
+    }
+    res.status(500).json({
+      error: 'internal',
+      message: 'A reposição não terminou. Alguns dados podem já ter sido apagados — repita a operação para concluir.',
+    });
+  }
+});
+
 expressApp.post('/api/staff/delete', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
   const requesterUid = req.callerUid!;
   const startedAt = new Date().toISOString();
