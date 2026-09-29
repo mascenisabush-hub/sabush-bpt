@@ -3380,6 +3380,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // re-requires resolution under its own (different) key — a stale
   // confirmation can never carry over to a different typed name.
   const [manualIdentityConfirmedNew, setManualIdentityConfirmedNew] = useState<Set<string>>(new Set());
+  // [Owner-requested, 2026-09-29] With an EMPTY catalog (first Contagem)
+  // there is nothing a name could match, so every product is new by
+  // definition — never ask "existing or new?". Both finalization gates
+  // (Rever/confirm here, recordStockCount) already skip the identity check
+  // when products.length === 0; this makes the screen agree.
+  const isConfirmedNewProductName = (name: string): boolean =>
+    products.length === 0 || manualIdentityConfirmedNew.has(productKeyFor(name));
 
   // [Bug fix — Contagem's resolution panel had no way to search the
   // full catalog] The panel's own `findSimilarProducts` candidates
@@ -7395,7 +7402,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // as before, unchanged.
     if (type !== 'initial' && products.length > 0) {
       const unresolvedItem = pendingTally.countedItems.find(
-        (item) => isGenuinelyNewProductName(item.productName) && !manualIdentityConfirmedNew.has(productKeyFor(item.productName))
+        (item) => isGenuinelyNewProductName(item.productName) && !isConfirmedNewProductName(item.productName)
       );
       if (unresolvedItem) {
         setError(`Confirme se "${unresolvedItem.productName}" é um produto existente ou um produto novo antes de continuar.`);
@@ -7609,7 +7616,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           // still harmlessly reflects manualIdentityConfirmedNew's
           // content either way, since recordStockCount itself never
           // reads this field for type === 'initial').
-          ...(manualIdentityConfirmedNew.has(item.productName.trim().toLowerCase())
+          ...(isConfirmedNewProductName(item.productName)
             ? { confirmedNewProduct: true }
             : {}),
           // [Implementation Authorization §14 item 6 — Reference
@@ -10405,7 +10412,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           already uses for its own non-blocking "did you
                           mean" suggestion, reused here as a BLOCKING
                           resolution step instead. */}
-                      {isNewProduct && !manualIdentityConfirmedNew.has(productKeyFor(group.displayName)) && (
+                      {isNewProduct && !isConfirmedNewProductName(group.displayName) && (
                         (() => {
                           const key = productKeyFor(group.displayName);
                           const candidates = findSimilarProducts(group.displayName, products);
@@ -10500,7 +10507,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           (Checkpoint C) — rendered once per CARD. Data
                           lives in newProductInfo, keyed by name. */}
                       {isNewProduct &&
-                        manualIdentityConfirmedNew.has(productKeyFor(group.displayName)) &&
+                        isConfirmedNewProductName(group.displayName) &&
                         (() => {
                           const key = productKeyFor(group.displayName);
                           const info = newProductInfo[key] ?? { purchaseUnit: '', relationshipSteps: [], sellingUnit: '' };

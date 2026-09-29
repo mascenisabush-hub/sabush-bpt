@@ -90,14 +90,24 @@ describe('Requirement A — unresolved identity cannot silently create a Product
     );
   });
 
+  // [Owner-requested, 2026-09-29] One shared rule for every check below:
+  // an explicit "confirm as new" is required, EXCEPT when the catalog is
+  // empty (first Contagem), where nothing could match so every name is new.
+  it('isConfirmedNewProductName = empty catalog OR explicitly confirmed — nothing else', () => {
+    assert.match(
+      periodicStockCountViewSource,
+      /const isConfirmedNewProductName = \(name: string\): boolean =>\s*products\.length === 0 \|\| manualIdentityConfirmedNew\.has\(productKeyFor\(name\)\);/
+    );
+  });
+
   it('PeriodicStockCountView.tsx re-checks every counted item at handleConfirmSave before recordStockCount is ever called', () => {
     assert.match(
       periodicStockCountViewSource,
-      /isGenuinelyNewProductName\(item\.productName\) && !manualIdentityConfirmedNew\.has\(productKeyFor\(item\.productName\)\)/
+      /isGenuinelyNewProductName\(item\.productName\) && !isConfirmedNewProductName\(item\.productName\)/
     );
     // The re-check must appear BEFORE the recordStockCount call, not after.
     const guardIdx = periodicStockCountViewSource.indexOf(
-      'isGenuinelyNewProductName(item.productName) && !manualIdentityConfirmedNew.has'
+      'isGenuinelyNewProductName(item.productName) && !isConfirmedNewProductName('
     );
     const callIdx = periodicStockCountViewSource.indexOf('const saved = await recordStockCount({');
     assert.ok(guardIdx > -1 && callIdx > -1);
@@ -186,7 +196,7 @@ describe('Requirement C — explicit New confirmation is the only thing that aut
   it('Contagem forwards confirmedNewProduct to recordStockCount only when the item is actually confirmed (never unconditionally true)', () => {
     assert.match(
       periodicStockCountViewSource,
-      /\.\.\.\(manualIdentityConfirmedNew\.has\(item\.productName\.trim\(\)\.toLowerCase\(\)\)\s*\n\s*\? \{ confirmedNewProduct: true \}\s*\n\s*: \{\}\)/
+      /\.\.\.\(isConfirmedNewProductName\(item\.productName\)\s*\n\s*\? \{ confirmedNewProduct: true \}\s*\n\s*: \{\}\)/
     );
   });
 });
@@ -225,14 +235,14 @@ describe('Requirement E — Periodic Contagem implements the same Existing/New p
   it('the new-product configuration panel (NewProductInfoPanel) only renders AFTER identity has been explicitly confirmed New', () => {
     assert.match(
       periodicStockCountViewSource,
-      /\{isNewProduct &&\s*\n\s*manualIdentityConfirmedNew\.has\(productKeyFor\(group\.displayName\)\) &&\s*\n\s*\(\(\) => \{/
+      /\{isNewProduct &&\s*\n\s*isConfirmedNewProductName\(group\.displayName\) &&\s*\n\s*\(\(\) => \{/
     );
   });
 
   it('the resolution panel itself only renders while unresolved (isNewProduct && not yet confirmed)', () => {
     assert.match(
       periodicStockCountViewSource,
-      /\{isNewProduct && !manualIdentityConfirmedNew\.has\(productKeyFor\(group\.displayName\)\) && \(/
+      /\{isNewProduct && !isConfirmedNewProductName\(group\.displayName\) && \(/
     );
   });
 });
