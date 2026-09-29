@@ -19,6 +19,11 @@ type ResetScope = 'all' | AreaScope;
 
 export const CONFIRM_WORD = 'APAGAR';
 
+// Phone keyboards autocapitalise, autocorrect and append spaces ("Apagar ", "apagár").
+// Compare only the letters, ignoring case, accents, spaces and punctuation.
+export const isConfirmWord = (value: string): boolean =>
+  value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z]/g, '').toUpperCase() === CONFIRM_WORD;
+
 export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { getClearDataPasswordStatus, setClearDataPassword, resetBusinessData } = useApp();
   const [step, setStep] = useState<'loading' | 'set-password' | 'choose' | 'confirm' | 'done'>('loading');
@@ -76,7 +81,7 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
   const handleReset = async () => {
     setError(null);
     if (!password) return setError('Introduza a password de reposição.');
-    if (confirmWord.trim().toUpperCase() !== CONFIRM_WORD) return setError(`Escreva ${CONFIRM_WORD} para confirmar.`);
+    if (!isConfirmWord(confirmWord)) return setError(`Escreva a palavra ${CONFIRM_WORD} no segundo campo para confirmar.`);
     setBusy(true);
     try {
       const scopes: ResetScope[] = all ? ['all'] : effective;
@@ -84,8 +89,8 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
       setDeletedTotal(Object.values(result.deletedCounts).reduce((sum, n) => sum + n, 0));
       setStep('done');
     } catch (err: any) {
+      // Keep what the person typed: they only need to fix the field the message names.
       setError(err?.message || 'Erro ao repor os dados.');
-      setPassword('');
     } finally {
       setBusy(false);
     }
@@ -133,7 +138,7 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
           </div>
         )}
 
-        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
+        <div className="p-4 sm:p-5 space-y-3 sm:space-y-4 overflow-y-auto flex-1 min-h-0">
           {step === 'loading' && (
             <p className="text-sm text-gray-500 flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" /> A verificar…
@@ -208,14 +213,20 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
                   <p className="mt-1 text-[12px]">Não é possível desfazer. Os outros dispositivos deste negócio também deixam de ver estes dados.</p>
                 </div>
               </div>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password de reposição" className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" autoFocus />
-              <input type="text" value={confirmWord} onChange={(e) => setConfirmWord(e.target.value)} placeholder={`Escreva ${CONFIRM_WORD} para confirmar`} className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" autoCapitalize="characters" />
+              <label className="block text-[12px] font-semibold text-gray-700">
+                1. Password de reposição {password && <span className="text-emerald-700">✓</span>}
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password de reposição" className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm font-normal" autoFocus autoComplete="off" />
+              </label>
+              <label className="block text-[12px] font-semibold text-gray-700">
+                2. Escreva a palavra {CONFIRM_WORD} {isConfirmWord(confirmWord) && <span className="text-emerald-700">✓</span>}
+                <input type="text" value={confirmWord} onChange={(e) => setConfirmWord(e.target.value)} placeholder={CONFIRM_WORD} className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm font-normal" autoCapitalize="characters" autoComplete="off" autoCorrect="off" spellCheck={false} />
+              </label>
               {error && <ErrorLine message={error} />}
               <div className="flex gap-2">
                 <button type="button" onClick={() => setStep('choose')} disabled={busy} className="flex-1 py-3 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700">
                   Voltar
                 </button>
-                <button type="button" onClick={handleReset} disabled={busy || confirmWord.trim().toUpperCase() !== CONFIRM_WORD || !password} className="flex-1 py-3 rounded-xl bg-rose-600 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
+                <button type="button" onClick={handleReset} disabled={busy} className="flex-1 py-3 rounded-xl bg-rose-600 text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
                   {busy && <Loader2 className="w-4 h-4 animate-spin" />} Apagar permanentemente
                 </button>
               </div>
