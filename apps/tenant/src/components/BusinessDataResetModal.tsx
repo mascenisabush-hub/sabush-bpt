@@ -11,7 +11,7 @@
 // The deletion itself runs on the server (resetBusinessData); afterwards the
 // app reloads so every screen starts from the fresh state.
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, Lock, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2, Lock, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 import { RESET_AREAS, expandAreas, type AreaScope } from '../lib/businessDataResetScopes';
@@ -81,7 +81,7 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
   const handleReset = async () => {
     setError(null);
     if (!password) return setError('Introduza a password de reposição.');
-    if (!isConfirmWord(confirmWord)) return setError(`Escreva a palavra ${CONFIRM_WORD} no segundo campo para confirmar.`);
+    if (!isConfirmWord(confirmWord)) return setError(`Escreva a palavra ${CONFIRM_WORD} no campo 2 para confirmar.`);
     setBusy(true);
     try {
       const scopes: ResetScope[] = all ? ['all'] : effective;
@@ -151,8 +151,13 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
                 Crie primeiro uma <strong>password de reposição</strong>. Ela será pedida sempre que alguém tentar apagar
                 dados deste negócio. Criar a password <strong>não apaga nada</strong>.
               </p>
-              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Nova password (mínimo 6 caracteres)" className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" autoFocus />
-              <input type="password" value={newPasswordConfirm} onChange={(e) => setNewPasswordConfirm(e.target.value)} placeholder="Repita a password" className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" />
+              <PasswordInput value={newPassword} onChange={setNewPassword} placeholder="Nova password (mínimo 6 caracteres)" name="new-reset-password" autoComplete="new-password" autoFocus />
+              <PasswordInput value={newPasswordConfirm} onChange={setNewPasswordConfirm} placeholder="Repita a password" name="new-reset-password-repeat" autoComplete="new-password" />
+              {newPasswordConfirm.length > 0 && (
+                <p className={`text-[12px] font-semibold ${newPassword === newPasswordConfirm ? 'text-emerald-700' : 'text-rose-600'}`}>
+                  {newPassword === newPasswordConfirm ? '✓ As passwords coincidem.' : '✗ Ainda não coincidem — toque no olho para ver o que escreveu.'}
+                </p>
+              )}
               {error && <ErrorLine message={error} />}
               <button type="button" onClick={handleSetPassword} disabled={busy} className="w-full py-3 rounded-xl bg-[#0B1F3A] text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
                 {busy && <Loader2 className="w-4 h-4 animate-spin" />} Criar password
@@ -213,13 +218,18 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
                   <p className="mt-1 text-[12px]">Não é possível desfazer. Os outros dispositivos deste negócio também deixam de ver estes dados.</p>
                 </div>
               </div>
-              <label className="block text-[12px] font-semibold text-gray-700">
-                1. Password de reposição {password && <span className="text-emerald-700">✓</span>}
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password de reposição" className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm font-normal" autoFocus autoComplete="off" />
-              </label>
+              <div className="block text-[12px] font-semibold text-gray-700">
+                <span className="block mb-1">1. Password de reposição {password && <span className="text-emerald-700">✓</span>}</span>
+                <PasswordInput value={password} onChange={setPassword} placeholder="Password de reposição" name="reset-password" autoComplete="off" autoFocus />
+              </div>
               <label className="block text-[12px] font-semibold text-gray-700">
                 2. Escreva a palavra {CONFIRM_WORD} {isConfirmWord(confirmWord) && <span className="text-emerald-700">✓</span>}
-                <input type="text" value={confirmWord} onChange={(e) => setConfirmWord(e.target.value)} placeholder={CONFIRM_WORD} className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm font-normal" autoCapitalize="characters" autoComplete="off" autoCorrect="off" spellCheck={false} />
+                <input type="text" name="confirm-word" value={confirmWord} onChange={(e) => setConfirmWord(e.target.value)} placeholder={CONFIRM_WORD} className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm font-normal" autoCapitalize="characters" autoComplete="off" autoCorrect="off" spellCheck={false} data-1p-ignore data-lpignore="true" />
+                {confirmWord.length > 0 && (
+                  <span className={`block mt-1 text-[12px] font-semibold ${isConfirmWord(confirmWord) ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    {isConfirmWord(confirmWord) ? '✓ Palavra reconhecida.' : `Lido: “${confirmWord}” — falta escrever exatamente ${CONFIRM_WORD}.`}
+                  </span>
+                )}
               </label>
               {error && <ErrorLine message={error} />}
               <div className="flex gap-2">
@@ -258,3 +268,45 @@ const ErrorLine: React.FC<{ message: string }> = ({ message }) => (
     <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {message}
   </p>
 );
+
+// Password box with a show/hide eye, so on a phone the person can SEE what was typed.
+// Browsers' password managers treat a password box next to a text box as a login form and
+// may autofill or overwrite either one — the data-* flags and autoComplete tell them not to.
+const PasswordInput: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  name: string;
+  autoComplete: 'off' | 'new-password';
+  autoFocus?: boolean;
+  className?: string;
+}> = ({ value, onChange, placeholder, name, autoComplete, autoFocus, className = '' }) => {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className={`relative ${className}`}>
+      <input
+        type={visible ? 'text' : 'password'}
+        name={name}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        autoComplete={autoComplete}
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        data-1p-ignore
+        data-lpignore="true"
+        className="w-full pl-3 pr-11 py-2.5 rounded-xl border border-gray-300 text-sm font-normal"
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? 'Esconder password' : 'Mostrar password'}
+        className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-gray-500 hover:text-gray-800"
+      >
+        {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
+    </div>
+  );
+};
