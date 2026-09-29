@@ -93,6 +93,9 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
 
   const titleFor = (scope: AreaScope) => RESET_AREAS.find((a) => a.scope === scope)?.title ?? scope;
 
+  const hasSelection = effective.length > 0;
+  const summary = all ? 'Tudo (reposição de fábrica)' : effective.map(titleFor).join(', ');
+
   return (
     <div className="modal-overlay z-[60] bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="data-reset-title">
       <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden modal-card flex flex-col">
@@ -111,6 +114,25 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
           )}
         </div>
 
+        {/* As soon as something is selected, Continuar (and Voltar) appear right here,
+            directly under the title — NOT at the bottom of a long list, where a phone's
+            browser toolbar can cover them. This bar never scrolls away. */}
+        {step === 'choose' && hasSelection && (
+          <div className="shrink-0 px-4 sm:px-5 py-2.5 bg-rose-50 border-b border-rose-200 space-y-2">
+            <p className="text-[12px] text-rose-900 leading-snug">
+              <span className="font-bold">Selecionado:</span> {summary}
+            </p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setAll(false); setSelected([]); }} className="flex-1 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-700">
+                Voltar
+              </button>
+              <button type="button" onClick={() => { setError(null); setStep('confirm'); }} className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-semibold">
+                Continuar
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
           {step === 'loading' && (
             <p className="text-sm text-gray-500 flex items-center gap-2">
@@ -126,12 +148,19 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
               </p>
               <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Nova password (mínimo 6 caracteres)" className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" autoFocus />
               <input type="password" value={newPasswordConfirm} onChange={(e) => setNewPasswordConfirm(e.target.value)} placeholder="Repita a password" className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" />
+              {error && <ErrorLine message={error} />}
+              <button type="button" onClick={handleSetPassword} disabled={busy} className="w-full py-3 rounded-xl bg-[#0B1F3A] text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+                {busy && <Loader2 className="w-4 h-4 animate-spin" />} Criar password
+              </button>
             </>
           )}
 
           {step === 'choose' && (
             <>
-              <p className="text-[13px] text-gray-700">O que pretende repor?</p>
+              <p className="text-[13px] text-gray-700">
+                O que pretende repor?{' '}
+                {!hasSelection && <span className="text-gray-500">Escolha abaixo — o botão Continuar aparece assim que selecionar.</span>}
+              </p>
               <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer ${all ? 'border-rose-400 bg-rose-50' : 'border-gray-200'}`}>
                 <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} className="mt-1" />
                 <span>
@@ -165,6 +194,7 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
                 <strong>Nunca é apagado:</strong> o perfil do negócio, os funcionários e as suas contas, a subscrição e os
                 pagamentos, e a própria password de reposição.
               </div>
+              {error && <ErrorLine message={error} />}
             </>
           )}
 
@@ -180,6 +210,15 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
               </div>
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password de reposição" className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" autoFocus />
               <input type="text" value={confirmWord} onChange={(e) => setConfirmWord(e.target.value)} placeholder={`Escreva ${CONFIRM_WORD} para confirmar`} className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" autoCapitalize="characters" />
+              {error && <ErrorLine message={error} />}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setStep('choose')} disabled={busy} className="flex-1 py-3 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700">
+                  Voltar
+                </button>
+                <button type="button" onClick={handleReset} disabled={busy || confirmWord.trim().toUpperCase() !== CONFIRM_WORD || !password} className="flex-1 py-3 rounded-xl bg-rose-600 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
+                  {busy && <Loader2 className="w-4 h-4 animate-spin" />} Apagar permanentemente
+                </button>
+              </div>
             </>
           )}
 
@@ -192,48 +231,19 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
                   <p>{deletedTotal} registo(s) apagado(s). A aplicação vai recarregar para começar do novo estado.</p>
                 </div>
               </div>
-            </>
-          )}
-
-        </div>
-
-        {/* Footer: always visible, never scrolls away (fixes buttons hidden at the bottom on phones) */}
-        {(step !== 'loading') && (
-          <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2.5">
-          {error && (
-            <p className="text-[12px] text-rose-600 flex items-start gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {error}
-            </p>
-          )}
-
-            {step === 'set-password' && (
-              <button type="button" onClick={handleSetPassword} disabled={busy} className="w-full py-2.5 rounded-xl bg-[#0B1F3A] text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
-                {busy && <Loader2 className="w-4 h-4 animate-spin" />} Criar password
-              </button>
-            )}
-            {step === 'choose' && (
-              <button type="button" disabled={effective.length === 0} onClick={() => { setError(null); setStep('confirm'); }} className="w-full py-2.5 rounded-xl bg-rose-600 text-white text-sm font-semibold disabled:opacity-40">
-                Continuar
-              </button>
-            )}
-            {step === 'confirm' && (
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setStep('choose')} disabled={busy} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700">
-                  Voltar
-                </button>
-                <button type="button" onClick={handleReset} disabled={busy || confirmWord.trim().toUpperCase() !== CONFIRM_WORD || !password} className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
-                  {busy && <Loader2 className="w-4 h-4 animate-spin" />} Apagar permanentemente
-                </button>
-              </div>
-            )}
-            {step === 'done' && (
-              <button type="button" onClick={() => window.location.reload()} className="w-full py-2.5 rounded-xl bg-[#0B1F3A] text-white text-sm font-semibold">
+              <button type="button" onClick={() => window.location.reload()} className="w-full py-3 rounded-xl bg-[#0B1F3A] text-white text-sm font-semibold">
                 Recarregar agora
               </button>
-            )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
 };
+
+const ErrorLine: React.FC<{ message: string }> = ({ message }) => (
+  <p className="text-[12px] text-rose-600 flex items-start gap-1.5">
+    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {message}
+  </p>
+);

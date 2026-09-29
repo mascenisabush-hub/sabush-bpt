@@ -116,7 +116,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
       <div className="bg-white border border-gray-200 rounded-3xl max-w-xl w-full p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 modal-card flex flex-col">
         {/* Modal Header */}
         <div className="flex items-start justify-between border-b border-gray-200 pb-4 shrink-0">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 min-w-0 flex-1">
             <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
               <Store className="w-5 h-5" />
             </div>
@@ -135,14 +135,27 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
             </div>
           </div>
 
-          {!isFirstTimeSetup && onClose && (
+          {/* Save is ALSO up here so it is always in reach, however tall the form is
+              and whatever the phone's browser toolbar covers at the bottom. */}
+          <div className="flex items-center gap-1.5 shrink-0 ml-2">
             <button
-              onClick={onClose}
-              className="p-1.5 text-gray-500 hover:text-gray-800 rounded-xl hover:bg-gray-50 transition shrink-0"
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="btn-primary py-2 px-3 text-xs disabled:opacity-60"
             >
-              <X className="w-5 h-5" />
+              <span>{isSaving ? 'A guardar...' : isFirstTimeSetup ? 'Concluir' : 'Guardar'}</span>
             </button>
-          )}
+            {!isFirstTimeSetup && onClose && (
+              <button
+                onClick={onClose}
+                aria-label="Fechar"
+                className="p-1.5 text-gray-500 hover:text-gray-800 rounded-xl hover:bg-gray-50 transition shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto space-y-5 pr-1">
