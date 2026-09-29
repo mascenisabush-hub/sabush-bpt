@@ -44,27 +44,45 @@ describe('computeMeasuredBusinessWorth — Decision A: existing financial activi
     assert.equal(result, 500000);
   });
 
-  it('cash/receivables/payables are OMITTED (not passed) for an Increment-1-era snapshot, and correctly contribute nothing — never silently treated as a real zero balance that could mask a future Increment 3 correction', () => {
+  it('cash/receivables/payables OMITTED (no Caixa counted): Decision A applies unchanged — expenses and withdrawals are subtracted', () => {
     const withoutThem = computeMeasuredBusinessWorth({
       productValuationTotal: 500000,
       totalExpensesAllTime: 10000,
       totalWithdrawalsAllTime: 5000,
     });
-    const withExplicitZeros = computeMeasuredBusinessWorth({
+    const withZeroReceivablesPayables = computeMeasuredBusinessWorth({
+      productValuationTotal: 500000,
+      totalExpensesAllTime: 10000,
+      totalWithdrawalsAllTime: 5000,
+      receivablesPosition: 0,
+      payablesPosition: 0,
+    });
+    assert.equal(withoutThem, 485000);
+    assert.equal(withZeroReceivablesPayables, 485000);
+  });
+
+  // [Bug fix — Owner-confirmed, 2026-09-29] The Caixa figure is the cash
+  // REMAINING after expenses and withdrawals were paid out of it, so they
+  // must not be subtracted a second time.
+  it('a COUNTED cash position already reflects expenses/withdrawals — they are not subtracted again (Owner example)', () => {
+    const result = computeMeasuredBusinessWorth({
+      productValuationTotal: 100000,
+      totalExpensesAllTime: 2000,
+      totalWithdrawalsAllTime: 4000,
+      cashPosition: 5000,
+    });
+    // 100000 + 5000 = 105000 — never 99000 (the double-counted figure).
+    assert.equal(result, 105000);
+  });
+
+  it('a counted cash position of 0 is a real count (empty drawer after expenses), not "absent"', () => {
+    const result = computeMeasuredBusinessWorth({
       productValuationTotal: 500000,
       totalExpensesAllTime: 10000,
       totalWithdrawalsAllTime: 5000,
       cashPosition: 0,
-      receivablesPosition: 0,
-      payablesPosition: 0,
     });
-    // Numerically identical today (0 contributes nothing either way) —
-    // this test exists to pin that the OMITTED-parameter code path and
-    // the explicit-zero code path are equivalent NOW, so that a future
-    // Increment 3 caller passing real, non-zero values is the only
-    // thing that can ever change this result — never a hidden default.
-    assert.equal(withoutThem, 485000);
-    assert.equal(withExplicitZeros, 485000);
+    assert.equal(result, 500000);
   });
 
   it('once real cash/receivables/payables values exist (a future Increment 3 caller), they correctly participate in the formula', () => {

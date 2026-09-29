@@ -1017,14 +1017,26 @@ export function computeMeasuredBusinessWorth(params: {
     receivablesPosition = 0,
     payablesPosition = 0,
   } = params;
+  // [Bug fix — Owner-confirmed, 2026-09-29] Decision A subtracts all-time
+  // Expenses and Levantamentos because, when it was made, a snapshot had
+  // no cash figure: subtracting them was the only way to reflect money
+  // that had left the business. The Caixa step now records the COUNTED
+  // cash, which is what remains AFTER those expenses and withdrawals were
+  // paid out of it (Owner: "cash 5000 … means the remaining cash after all
+  // the expenses and withdrawals were done"). Subtracting them again
+  // counted every expense/withdrawal twice — and, being all-time totals,
+  // the error grew with every Contagem. So: when a counted cash position
+  // is present, expenses/withdrawals are already reflected in it and are
+  // NOT subtracted again; when it is absent, Decision A applies unchanged.
+  const cashWasCounted = params.cashPosition !== undefined;
+  const alreadyReflectedOutflows = cashWasCounted ? 0 : totalExpensesAllTime + totalWithdrawalsAllTime;
   return Number(
     (
       productValuationTotal +
       cashPosition +
       receivablesPosition -
       payablesPosition -
-      totalExpensesAllTime -
-      totalWithdrawalsAllTime
+      alreadyReflectedOutflows
     ).toFixed(2)
   );
 }
