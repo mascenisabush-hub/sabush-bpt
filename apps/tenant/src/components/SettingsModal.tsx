@@ -273,7 +273,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
-      <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-full">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-200 shrink-0">
           <div>
@@ -321,7 +321,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
         )}
 
         {/* Content Body */}
-        <div className="p-5 overflow-y-auto space-y-6 flex-1">
+        <div className="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] overflow-y-auto space-y-6 flex-1 min-h-0">
           {activeSection === 'general' && (
             <>
               {/* Business Profile Card */}

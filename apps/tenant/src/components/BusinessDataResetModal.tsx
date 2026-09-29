@@ -94,9 +94,9 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
   const titleFor = (scope: AreaScope) => RESET_AREAS.find((a) => a.scope === scope)?.title ?? scope;
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="data-reset-title">
-      <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="data-reset-title">
+      <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-full flex flex-col">
+        <div className="p-4 sm:p-5 border-b border-gray-200 flex items-center gap-3 shrink-0">
           <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center shrink-0">
             <Lock className="w-5 h-5 text-rose-600" />
           </div>
@@ -111,7 +111,7 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
           )}
         </div>
 
-        <div className="p-5 space-y-4 overflow-y-auto">
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
           {step === 'loading' && (
             <p className="text-sm text-gray-500 flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" /> A verificar…
@@ -126,9 +126,6 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
               </p>
               <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Nova password (mínimo 6 caracteres)" className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" autoFocus />
               <input type="password" value={newPasswordConfirm} onChange={(e) => setNewPasswordConfirm(e.target.value)} placeholder="Repita a password" className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" />
-              <button type="button" onClick={handleSetPassword} disabled={busy} className="w-full py-2.5 rounded-xl bg-[#0B1F3A] text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
-                {busy && <Loader2 className="w-4 h-4 animate-spin" />} Criar password
-              </button>
             </>
           )}
 
@@ -168,9 +165,6 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
                 <strong>Nunca é apagado:</strong> o perfil do negócio, os funcionários e as suas contas, a subscrição e os
                 pagamentos, e a própria password de reposição.
               </div>
-              <button type="button" disabled={effective.length === 0} onClick={() => { setError(null); setStep('confirm'); }} className="w-full py-2.5 rounded-xl bg-rose-600 text-white text-sm font-semibold disabled:opacity-40">
-                Continuar
-              </button>
             </>
           )}
 
@@ -186,14 +180,6 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
               </div>
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password de reposição" className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" autoFocus />
               <input type="text" value={confirmWord} onChange={(e) => setConfirmWord(e.target.value)} placeholder={`Escreva ${CONFIRM_WORD} para confirmar`} className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm" autoCapitalize="characters" />
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setStep('choose')} disabled={busy} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700">
-                  Voltar
-                </button>
-                <button type="button" onClick={handleReset} disabled={busy || confirmWord.trim().toUpperCase() !== CONFIRM_WORD || !password} className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
-                  {busy && <Loader2 className="w-4 h-4 animate-spin" />} Apagar permanentemente
-                </button>
-              </div>
             </>
           )}
 
@@ -206,18 +192,47 @@ export const BusinessDataResetModal: React.FC<{ onClose: () => void }> = ({ onCl
                   <p>{deletedTotal} registo(s) apagado(s). A aplicação vai recarregar para começar do novo estado.</p>
                 </div>
               </div>
-              <button type="button" onClick={() => window.location.reload()} className="w-full py-2.5 rounded-xl bg-[#0B1F3A] text-white text-sm font-semibold">
-                Recarregar agora
-              </button>
             </>
           )}
 
+        </div>
+
+        {/* Footer: always visible, never scrolls away (fixes buttons hidden at the bottom on phones) */}
+        {(step !== 'loading') && (
+          <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2.5">
           {error && (
             <p className="text-[12px] text-rose-600 flex items-start gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {error}
             </p>
           )}
-        </div>
+
+            {step === 'set-password' && (
+              <button type="button" onClick={handleSetPassword} disabled={busy} className="w-full py-2.5 rounded-xl bg-[#0B1F3A] text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+                {busy && <Loader2 className="w-4 h-4 animate-spin" />} Criar password
+              </button>
+            )}
+            {step === 'choose' && (
+              <button type="button" disabled={effective.length === 0} onClick={() => { setError(null); setStep('confirm'); }} className="w-full py-2.5 rounded-xl bg-rose-600 text-white text-sm font-semibold disabled:opacity-40">
+                Continuar
+              </button>
+            )}
+            {step === 'confirm' && (
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setStep('choose')} disabled={busy} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700">
+                  Voltar
+                </button>
+                <button type="button" onClick={handleReset} disabled={busy || confirmWord.trim().toUpperCase() !== CONFIRM_WORD || !password} className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
+                  {busy && <Loader2 className="w-4 h-4 animate-spin" />} Apagar permanentemente
+                </button>
+              </div>
+            )}
+            {step === 'done' && (
+              <button type="button" onClick={() => window.location.reload()} className="w-full py-2.5 rounded-xl bg-[#0B1F3A] text-white text-sm font-semibold">
+                Recarregar agora
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

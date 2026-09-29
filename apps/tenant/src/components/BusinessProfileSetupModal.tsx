@@ -112,8 +112,8 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white border border-gray-200 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-5 my-8 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white border border-gray-200 rounded-3xl max-w-xl w-full p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 max-h-full flex flex-col">
         {/* Modal Header */}
         <div className="flex items-start justify-between border-b border-gray-200 pb-4 shrink-0">
           <div className="flex items-center space-x-3">
@@ -145,7 +145,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-5 pr-1">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-5 pr-1">
           {error && (
             <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 text-xs">
               {error}
@@ -334,12 +334,12 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
         </div>
 
         {/* Footer */}
-        <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-3 shrink-0">
+        <div className="pt-3 pb-[env(safe-area-inset-bottom)] border-t border-gray-200 flex items-center justify-end gap-3 shrink-0">
           <button
             type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className="btn-primary py-2.5 px-6 text-sm disabled:opacity-60"
+            className="btn-primary w-full sm:w-auto py-3 sm:py-2.5 px-6 text-sm disabled:opacity-60"
           >
             <span>{isSaving ? 'A guardar...' : isFirstTimeSetup ? 'Concluir Configuração' : 'Guardar Alterações'}</span>
           </button>
