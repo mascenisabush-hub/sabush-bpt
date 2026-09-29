@@ -116,7 +116,12 @@ describe('AppContext.tsx — recordStockCount (Checkpoint 3 aggregate derivation
 
 describe('AppContext.tsx — BusinessWorthSnapshot write payload (Checkpoint 3, FR-74)', () => {
   it('the four raw CAIXER components are written onto the snapshot literal, gated on the SAME hasCaixer check as the aggregate — never independently present/absent', () => {
-    const start = appContextSrc.indexOf('const businessWorthSnapshot: Omit<BusinessWorthSnapshot');
+    // The Contagem snapshot literal inside recordStockCount (the Declarar
+    // path, earlier in the file, has its own literal without CAIXER).
+    const start = appContextSrc.indexOf(
+      'const businessWorthSnapshot: Omit<BusinessWorthSnapshot',
+      appContextSrc.indexOf('const recordStockCount = async')
+    );
     assert.notEqual(start, -1);
     const end = appContextSrc.indexOf('\n      };', start);
     const body = appContextSrc.slice(start, end);

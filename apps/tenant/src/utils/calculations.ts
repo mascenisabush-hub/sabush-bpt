@@ -603,7 +603,28 @@ function computeCaseALiveBusinessWorth(params: {
       .toFixed(2)
   );
 
-  const financialPositionChangeSinceSnapshot = Number((payablesPositionChange + cashLedgerNetSinceSnapshot).toFixed(2));
+  // [Bug fix — Owner-approved, 2026-09-29] A supplier-credit purchase
+  // recorded after the snapshot creates a Payable for the FULL stock cost
+  // (+Stock: totalAmount = the purchase's investment value). The debt was
+  // subtracted above, but the stock it bought was never added — so buying
+  // on credit lowered worth by its cost (500k → 480k), while the same
+  // purchase paid in cash left it flat (505k with its embedded profit).
+  // The goods received are an asset worth exactly what is owed: add that
+  // cost back once, making a credit purchase neutral at cost like a cash
+  // purchase (asset conversion), with only its embedded profit counting.
+  // Paying the supplier later stays flat: debt −X (+X here) and cash −X.
+  // Payables that already existed at the snapshot are untouched (their
+  // stock was physically counted into the snapshot itself).
+  const creditPurchaseStockReceivedSinceSnapshot = Number(
+    payables
+      .filter((p) => p.sourcePurchaseBatchId && isPostSnapshotActivity(p.createdAt))
+      .reduce((sum, p) => sum + Number(p.totalAmount || 0), 0)
+      .toFixed(2)
+  );
+
+  const financialPositionChangeSinceSnapshot = Number(
+    (payablesPositionChange + cashLedgerNetSinceSnapshot + creditPurchaseStockReceivedSinceSnapshot).toFixed(2)
+  );
 
   // [Business Worth Evolution — Implementation Authorization, Increment
   // 10 (Revision 3), §23 item 3; Specification §43, FR-64; Rule 8

@@ -6555,7 +6555,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // cutover timestamp (Decision 1). Uses each record's own `date`
       // field, matching how this codebase already filters by date
       // elsewhere (isDateInRange, calculations.ts).
-      const previousSnapshots = businessWorthSnapshots.filter((s) => s.status === 'active');
+      // [Bug fix — Owner-approved, 2026-09-29] A correction REPLACES the
+      // snapshot it corrects (marked corrected in this same batch, below).
+      // That snapshot is still 'active' at this moment, so it was being used
+      // as this correction's own baseline — its difference, "previous
+      // value" and "since last count" figures were measured against the
+      // very snapshot being replaced. Leave it out of every comparison.
+      const baselineSnapshots = correctionOfSnapshotId
+        ? businessWorthSnapshots.filter((s) => s.id !== correctionOfSnapshotId)
+        : businessWorthSnapshots;
+      const previousSnapshots = baselineSnapshots.filter((s) => s.status === 'active');
       const previousSnapshot = previousSnapshots.length
         ? [...previousSnapshots].sort((a, b) => {
             const aMs = (a.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
@@ -6563,54 +6572,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return bMs - aMs;
           })[0]
         : null;
-      const windowStartDate = previousSnapshot
-        ? new Date(
-            (previousSnapshot.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0
-          ).toISOString().slice(0, 10)
-        : (business?.createdAt ?? '1970-01-01').slice(0, 10);
+      // [Bug fix — Owner-approved, 2026-09-29] "Since last count" windows use
+      // exact timestamps (createdAt), strictly after the previous snapshot's
+      // confirmation and up to this confirmation — the same rule the live
+      // Valor de Negócio uses. The old calendar-day window (UTC dates,
+      // inclusive at both ends) counted the previous count's day in two
+      // consecutive snapshots and mis-dated entries around Maputo midnight.
+      const confirmationMillis = Date.now();
+      const windowStartMillis = previousSnapshot
+        ? (previousSnapshot.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0
+        : business?.createdAt
+          ? new Date(business.createdAt).getTime() || 0
+          : 0;
+      const isSinceLastSnapshot = (createdAt: string | undefined): boolean => {
+        const t = createdAt ? new Date(createdAt).getTime() : NaN;
+        return Number.isFinite(t) && t > windowStartMillis && t <= confirmationMillis;
+      };
       const expensesSinceLastSnapshot = Number(
         expenses
-          .filter((e) => isDateInRange(e.date, windowStartDate, date))
+          .filter((e) => isSinceLastSnapshot(e.createdAt))
           .reduce((sum, e) => sum + Number(e.amount || 0), 0)
           .toFixed(2)
       );
       const breakagesSinceLastSnapshot = Number(
         quebras
-          .filter((q) => isDateInRange(q.date, windowStartDate, date))
+          .filter((q) => isSinceLastSnapshot(q.createdAt))
           .reduce((sum, q) => sum + Number(q.quantityLost || 0) * (batches.find((b) => b.id === q.batchId)?.costPrice ?? 0), 0)
           .toFixed(2)
       );
       const levantamentosSinceLastSnapshot = Number(
         withdrawals
-          .filter((w) => isDateInRange(w.date, windowStartDate, date))
+          .filter((w) => isSinceLastSnapshot(w.createdAt))
           .reduce((sum, w) => sum + Number(w.amount || 0), 0)
           .toFixed(2)
       );
 
-      // [Business Worth Evolution — Implementation Authorization,
-      // Increment 10 (Revision 3), §23 item 3; Specification §43,
-      // FR-65; Rule 8 Finding OI-5; Product Architect's recorded
-      // `createdAt` boundary clarification] Reuses the SAME
-      // `previousSnapshot` (the active baseline) already resolved
-      // immediately above for the three sibling drill-down fields —
-      // but, per FR-65's own explicit boundary requirement, compares
-      // against `OwnerInvestment.createdAt`, never against the
-      // calendar-day `windowStartDate`/`isDateInRange` those three
-      // fields use for `date`-based sources. `null` (no previous active
-      // snapshot — this is the business's very first-ever snapshot)
-      // correctly yields 0 from the shared helper below — there is no
-      // FR-64 contribution defined before any baseline exists either
-      // (getEstimatedBusinessWorth's own Case B has no such term), so
-      // this stays consistent with FR-64 rather than inventing a
-      // "since business creation" fallback the sibling fields use for
-      // an unrelated (date-based, not createdAt-based) reason.
       const activeBaselineConfirmedAtMillis = previousSnapshot
         ? (previousSnapshot.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? null
         : null;
       const ownerInvestmentSinceLastSnapshot = computeOwnerInvestmentsSinceSnapshot(
         ownerInvestments,
         activeBaselineConfirmedAtMillis,
-        Date.now()
+        confirmationMillis
       );
 
       // [Specification §7, §41; Implementation Plan §6 (corrected)]
@@ -6628,7 +6631,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // state, since it is written directly to Firestore below, not
       // pushed into this array first.
       const priorCurrent = getCurrentBusinessWorth({
-        snapshots: businessWorthSnapshots,
+        snapshots: baselineSnapshots,
         batches,
         quebras,
         expenses,
@@ -6655,7 +6658,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // its first Initial Stock AND its first snapshot) had no baseline at
       // all to estimate from beforehand.
       const priorEstimated = getEstimatedBusinessWorth({
-        snapshots: businessWorthSnapshots,
+        snapshots: baselineSnapshots,
         initialStockCount,
         batches,
         quebras,
@@ -6685,7 +6688,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // (Increment 3) — see their own computation for what each
       // represents.
       const ledgerDerivedCashBalance = hasCashPosition
-        ? getLedgerDerivedCashBalance(cashLedgerEntries, new Date(`${date}T23:59:59.999Z`).getTime())
+        ? getLedgerDerivedCashBalance(cashLedgerEntries, confirmationMillis) // counted now → compare with the ledger as of now (not end of `date` in UTC)
         : undefined;
       const cashReconciliationDifference =
         hasCashPosition && ledgerDerivedCashBalance !== undefined

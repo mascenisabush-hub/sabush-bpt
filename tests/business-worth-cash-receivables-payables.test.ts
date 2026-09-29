@@ -148,13 +148,19 @@ describe('Increment 3 — Test Requirement #28: 500,000 + 25,000 stock cost + 5,
   });
 });
 
-describe('Increment 3 — Example C / Payables: supplier-credit purchase reduces Business Worth once, at recording time (FIN-4)', () => {
-  it('an outstanding Payable recorded after the snapshot reduces Current Business Worth by its own outstanding amount', () => {
+// [Bug fix — Owner-approved, 2026-09-29] A supplier-credit purchase used to
+// subtract the debt but never add the stock it bought (500k → 480k), while
+// the same purchase paid in cash gave 505k. The goods received are worth
+// exactly what is owed, so a credit purchase is now neutral at cost, like
+// a cash purchase, with only its embedded profit counting.
+describe('Increment 3 — Example C / Payables: supplier-credit purchase is neutral at cost, like a cash purchase', () => {
+  it('a credit purchase recorded after the snapshot: debt and stock received cancel out — only the embedded profit counts (same as cash)', () => {
     const snapshots = [makeSnapshot({ measuredBusinessWorth: 500000, embeddedProfitTotal: 0 })];
     const batches = [makeBatch({ id: 'b-credit', quantity: 100, costPrice: 250, sellingPrice: 300, createdAt: '2026-08-05T00:00:00.000Z' })];
     const payables = [makePayable({ totalAmount: 25000, amountRemaining: 25000, createdAt: '2026-08-05T00:00:00.000Z' })];
-    // 500,000 + 5,000 embedded profit - 25,000 outstanding payable = 480,000.
-    assert.equal(callCurrent({ snapshots, batches, payables }), 480000);
+    // 500,000 + 5,000 embedded profit - 25,000 debt + 25,000 stock received = 505,000
+    // — identical to the cash-financed purchase in Example B above.
+    assert.equal(callCurrent({ snapshots, batches, payables }), 505000);
   });
 
   it('Test Requirement #32: paying off the Payable in full does not erase the stock purchase\'s own economic value — worth stays flat through the payment (FIN-5, settles rather than doubly reduces)', () => {
@@ -185,8 +191,8 @@ describe('Increment 3 — Example C / Payables: supplier-credit purchase reduces
       ],
     });
 
-    assert.equal(beforePayment, 480000);
-    assert.equal(afterPayment, 480000, 'Worth must remain flat through the payment — never a second reduction, and never a reversal of the original reduction.');
+    assert.equal(beforePayment, 505000);
+    assert.equal(afterPayment, 505000, 'Worth must remain flat through the payment — never a second reduction, and never a reversal of the original reduction.');
   });
 
   it('a Payable that already existed AT the snapshot (baked into payablesPosition) contributes nothing further unless its own balance changes afterward', () => {
