@@ -575,6 +575,8 @@ export const fr: TranslationDict = {
     emptyState: 'Aucun produit enregistré. Ajoutez d\u2019abord un lot de stock avant d\u2019enregistrer des pertes.',
     loadingAfterShopSwitch: 'Mise à jour des données de la boutique...',
     selectProduct: 'Sélectionner un Produit',
+    searchProductPlaceholder: 'Tapez pour chercher le produit…',
+    noProductMatch: 'Aucun produit ne correspond à ces lettres.',
     selectBatch: 'Sélectionner un Lot',
     noBatchesForProduct: 'Aucun lot de stock enregistré pour ce produit.',
     qtyLabel: 'Qté',

@@ -575,6 +575,8 @@ export const en: TranslationDict = {
     emptyState: 'No products registered yet. Add a stock batch first before recording losses.',
     loadingAfterShopSwitch: 'Updating shop data...',
     selectProduct: 'Select Product',
+    searchProductPlaceholder: 'Type to search for the product…',
+    noProductMatch: 'No product matches these letters.',
     selectBatch: 'Select Batch',
     noBatchesForProduct: 'No stock batch registered for this product.',
     qtyLabel: 'Qty',

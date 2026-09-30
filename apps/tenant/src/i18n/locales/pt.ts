@@ -618,6 +618,8 @@ export interface TranslationDict {
     emptyState: string;
     loadingAfterShopSwitch: string;
     selectProduct: string;
+    searchProductPlaceholder: string;
+    noProductMatch: string;
     selectBatch: string;
     noBatchesForProduct: string;
     qtyLabel: string;
@@ -1924,6 +1926,8 @@ export const pt: TranslationDict = {
     emptyState: 'Nenhum produto cadastrado. Adicione primeiro um lote de stock antes de registar quebras.',
     loadingAfterShopSwitch: 'A atualizar dados da loja...',
     selectProduct: 'Selecionar Produto',
+    searchProductPlaceholder: 'Escreva para procurar o produto…',
+    noProductMatch: 'Nenhum produto com estas letras.',
     selectBatch: 'Selecionar Lote',
     noBatchesForProduct: 'Nenhum lote de stock registado para este produto.',
     qtyLabel: 'Qtd',

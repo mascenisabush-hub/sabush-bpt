@@ -4,7 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { calculateBatch, isQuebraExceedingWarning } from '../utils/calculations';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
-import { AlertTriangle, CheckCircle2, Info, ArrowRight, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, ArrowRight, X, Search } from 'lucide-react';
 import { detectShopSwitch, isBusinessDataReady, isSelectionSafeToSubmit } from '../lib/shopSwitchGuard';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 // [Bug fix — "digits typed are hidden" on decimal entry] See this
@@ -42,6 +42,13 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
   const { t } = useLanguage();
 
   const [selectedProductId, setSelectedProductId] = useState<string>('');
+  // [Owner-requested, 2026-09-29] Product is chosen by SEARCH, not by
+  // scrolling a dropdown: typing any part of the name (accents/capitals
+  // ignored) shows the matching products; click, or ↑/↓ + Enter, selects.
+  // The field shows the selected product's name when not searching.
+  const [productQuery, setProductQuery] = useState('');
+  const [productListOpen, setProductListOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [selectedBatchId, setSelectedBatchId] = useState<string>('');
   const [date, setDate] = useState<string>(getTodayDateString());
   const [quantityLost, setQuantityLost] = useState<string>('1');
@@ -132,6 +139,25 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
 
   // Product batches
   const availableBatches = batches.filter(b => b.productId === selectedProductId);
+
+  const normalizeForSearch = (text: string) =>
+    text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const selectedProductName = products.find(p => p.id === selectedProductId)?.name ?? '';
+  const matchingProducts = (() => {
+    const q = normalizeForSearch(productQuery);
+    const list = q ? products.filter(p => normalizeForSearch(p.name).includes(q)) : products;
+    return [...list].sort((a, b) => {
+      // names that START with the typed letters first, then alphabetical
+      const aStarts = q && normalizeForSearch(a.name).startsWith(q) ? 0 : 1;
+      const bStarts = q && normalizeForSearch(b.name).startsWith(q) ? 0 : 1;
+      return aStarts - bStarts || a.name.localeCompare(b.name);
+    });
+  })();
+  const chooseProduct = (productId: string) => {
+    setSelectedProductId(productId);
+    setProductQuery('');
+    setProductListOpen(false);
+  };
   const targetBatch = batches.find(b => b.id === selectedBatchId);
 
   // Calculate current state of target batch
@@ -255,17 +281,77 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
               <label className="block type-label mb-1.5">
                 {t('addQuebra.selectProduct')}
               </label>
-              <select
-                value={selectedProductId}
-                onChange={e => setSelectedProductId(e.target.value)}
-                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3.5 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-              >
-                {products.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+              <div className="relative max-w-md">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  role="combobox"
+                  aria-expanded={productListOpen}
+                  aria-controls="quebra-product-options"
+                  aria-autocomplete="list"
+                  value={productListOpen ? productQuery : selectedProductName}
+                  placeholder={t('addQuebra.searchProductPlaceholder')}
+                  onFocus={() => {
+                    setProductQuery('');
+                    setHighlightedIndex(0);
+                    setProductListOpen(true);
+                  }}
+                  onChange={e => {
+                    setProductQuery(e.target.value);
+                    setHighlightedIndex(0);
+                    setProductListOpen(true);
+                  }}
+                  onBlur={() => {
+                    // let a click on an option land before closing
+                    setTimeout(() => setProductListOpen(false), 150);
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setProductListOpen(true);
+                      setHighlightedIndex(i => Math.min(i + 1, Math.max(matchingProducts.length - 1, 0)));
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setHighlightedIndex(i => Math.max(i - 1, 0));
+                    } else if (e.key === 'Enter') {
+                      // never submit the form while choosing a product
+                      e.preventDefault();
+                      const pick = matchingProducts[highlightedIndex];
+                      if (productListOpen && pick) chooseProduct(pick.id);
+                    } else if (e.key === 'Escape') {
+                      setProductListOpen(false);
+                    }
+                  }}
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] pl-9 pr-3.5 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                />
+                {productListOpen && (
+                  <ul
+                    id="quebra-product-options"
+                    role="listbox"
+                    className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-[#E5E7EB] rounded-[10px] shadow-lg py-1"
+                  >
+                    {matchingProducts.length === 0 ? (
+                      <li className="px-3.5 py-2.5 text-sm text-gray-500">{t('addQuebra.noProductMatch')}</li>
+                    ) : (
+                      matchingProducts.map((p, index) => (
+                        <li
+                          key={p.id}
+                          role="option"
+                          aria-selected={p.id === selectedProductId}
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => chooseProduct(p.id)}
+                          onMouseEnter={() => setHighlightedIndex(index)}
+                          className={`px-3.5 py-2 text-sm cursor-pointer ${
+                            index === highlightedIndex ? 'bg-[#D4AF37]/[0.12] text-[#0B1F3A]' : 'text-[#111827]'
+                          } ${p.id === selectedProductId ? 'font-semibold' : ''}`}
+                        >
+                          {p.name}
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                )}
+              </div>
             </div>
 
             {/* Batch Selector */}
