@@ -158,22 +158,22 @@ describe('Fix #6 — verifyStaffManagementAction() multi-shop Owner authorizatio
   });
 });
 
-describe('Fix #6 — all five staff endpoints remain routed through the single shared authorization function', () => {
-  it('has exactly five verifyStaffManagementAction() call sites (delete, suspend, reactivate, reset-pin, set-tier)', () => {
+describe('Fix #6 — all six staff endpoints remain routed through the single shared authorization function', () => {
+  it('has exactly six verifyStaffManagementAction() call sites (delete, suspend, reactivate, reset-pin, set-tier, set-permissions)', () => {
     const matches = SOURCE.match(/await verifyStaffManagementAction\(/g) || [];
     assert.equal(
       matches.length,
-      5,
-      'Expected exactly five call sites — one per staff-management endpoint. A different count means the fix was duplicated per-endpoint instead of centralized, or an endpoint was missed.'
+      6,
+      'Expected exactly six call sites — one per staff-management endpoint. A different count means the fix was duplicated per-endpoint instead of centralized, or an endpoint was missed.'
     );
   });
 
-  it('reset-pin and set-tier still pass { adminOnly: true }, unchanged', () => {
+  it('reset-pin, set-tier and set-permissions pass { adminOnly: true }', () => {
     const matches = SOURCE.match(/await verifyStaffManagementAction\([^)]*\{\s*adminOnly:\s*true\s*\}\)/g) || [];
     assert.equal(
       matches.length,
-      2,
-      'Expected exactly two adminOnly: true call sites (reset-pin, set-tier) — this fix must not add or remove adminOnly gating anywhere.'
+      3,
+      'Expected exactly three adminOnly: true call sites (reset-pin, set-tier, set-permissions) — this fix must not add or remove adminOnly gating anywhere.'
     );
   });
 });

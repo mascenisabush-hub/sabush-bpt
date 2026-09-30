@@ -28,10 +28,11 @@ import { InstallAppBanner } from './components/InstallAppBanner';
 import { SupportPointerOverlay } from './components/SupportPointerOverlay';
 import { SupportDesktopCapture } from './components/SupportDesktopCapture';
 import { Product } from './types';
+import { NAV_TABS, canViewTab } from './data/navigationTabs';
 import { useDocumentTitle, tabTitleKey } from './hooks/useDocumentTitle';
 
 function MainApp() {
-  const { currentUser, isAuthLoading, isStaff, pairedDevice } = useApp();
+  const { currentUser, isAuthLoading, can, pairedDevice } = useApp();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   // A paired device defaults to the PIN quick-login screen when logged
@@ -46,19 +47,27 @@ function MainApp() {
   // Detail Modal state
   const [selectedDetailProduct, setSelectedDetailProduct] = useState<Product | null>(null);
 
-  // Restrict staff users to allowed tabs
+  // Owner-Granted Permissions: only tabs the person may view are reachable.
+  // If the current tab is not (first load, or the owner just changed the
+  // permissions live), fall back to the first tab they can see.
+  const canOpenTab = (tab: TabType) => canViewTab(can, tab);
+  const firstOpenableTab = (): TabType | null =>
+    (NAV_TABS.find(tab => canOpenTab(tab.id))?.id as TabType | undefined) ?? null;
+
   useEffect(() => {
-    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'stock-count' || activeTab === 'closing' || activeTab === 'timeline' || activeTab === 'cash-flow' || activeTab === 'startup-investment')) {
-      setActiveTab('add-stock');
-    }
-  }, [isStaff, activeTab]);
+    if (!currentUser || canOpenTab(activeTab)) return;
+    const fallback = firstOpenableTab();
+    if (fallback) setActiveTab(fallback);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, activeTab, JSON.stringify(NAV_TABS.map(tab => canOpenTab(tab.id)))]);
 
   useEffect(() => {
     const handleCustomNav = (e: Event) => {
       const customEvent = e as CustomEvent<TabType>;
       if (customEvent.detail) {
-        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'stock-count' || customEvent.detail === 'closing' || customEvent.detail === 'timeline' || customEvent.detail === 'cash-flow' || customEvent.detail === 'startup-investment')) {
-          setActiveTab('add-stock');
+        if (!canOpenTab(customEvent.detail)) {
+          const fallback = firstOpenableTab();
+          if (fallback) setActiveTab(fallback);
         } else {
           setActiveTab(customEvent.detail);
         }
@@ -66,7 +75,8 @@ function MainApp() {
     };
     window.addEventListener('navigate-tab', handleCustomNav);
     return () => window.removeEventListener('navigate-tab', handleCustomNav);
-  }, [isStaff]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [can]);
 
   // Browser tab title. While logged out, AuthView / QuickLoginScreen own
   // the title themselves (they know which auth screen is showing); passing
@@ -132,7 +142,7 @@ function MainApp() {
       <SupportDesktopCapture />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 sm:py-8 pb-24 md:pb-12">
-        {!isStaff && activeTab === 'dashboard' && (
+        {canOpenTab('dashboard') && activeTab === 'dashboard' && (
           <DashboardView
             onNavigateToAddStock={handleNavigateToAddStock}
             onNavigateToAddQuebra={handleNavigateToAddQuebra}
@@ -142,56 +152,56 @@ function MainApp() {
           />
         )}
 
-        {!isStaff && activeTab === 'initial-stock' && (
+        {canOpenTab('initial-stock') && activeTab === 'initial-stock' && (
           <InitialStockCountView
             onComplete={() => setActiveTab('dashboard')}
             onSkip={() => setActiveTab('dashboard')}
           />
         )}
 
-        {!isStaff && activeTab === 'stocks' && <StocksView />}
+        {canOpenTab('stocks') && activeTab === 'stocks' && <StocksView />}
 
         {/* [Owner Product Catalog — Phase 1, Checkpoint A] Zero props —
             identical mount pattern to StocksView immediately above.
             Registration/search/edit wiring is Checkpoints B–E, not
             implemented here. */}
-        {!isStaff && activeTab === 'catalog' && <ProductCatalogView />}
+        {canOpenTab('catalog') && activeTab === 'catalog' && <ProductCatalogView />}
 
-        {!isStaff && activeTab === 'stock-count' && (
+        {canOpenTab('stock-count') && activeTab === 'stock-count' && (
           <PeriodicStockCountView onComplete={() => setActiveTab('dashboard')} />
         )}
 
-        {!isStaff && activeTab === 'declare-worth' && (
+        {canOpenTab('declare-worth') && activeTab === 'declare-worth' && (
           <DeclareBusinessWorthView onComplete={() => setActiveTab('dashboard')} />
         )}
 
-        {activeTab === 'add-stock' && (
+        {canOpenTab('add-stock') && activeTab === 'add-stock' && (
           <AddStockView
             initialProductName={stockPrefillProduct}
             onComplete={() => {
               setStockPrefillProduct(undefined);
-              setActiveTab(isStaff ? 'add-stock' : 'dashboard');
+              setActiveTab(canOpenTab('dashboard') ? 'dashboard' : 'add-stock');
             }}
           />
         )}
 
-        {activeTab === 'add-quebra' && (
+        {canOpenTab('add-quebra') && activeTab === 'add-quebra' && (
           <AddQuebraView
             initialProductId={quebraPrefillProduct}
             onComplete={() => {
               setQuebraPrefillProduct(undefined);
-              setActiveTab(isStaff ? 'add-quebra' : 'dashboard');
+              setActiveTab(canOpenTab('dashboard') ? 'dashboard' : 'add-quebra');
             }}
           />
         )}
 
-        {!isStaff && activeTab === 'closing' && (
+        {canOpenTab('closing') && activeTab === 'closing' && (
           <ClosingView onComplete={() => setActiveTab('dashboard')} />
         )}
 
-        {!isStaff && activeTab === 'reports' && <ReportsView />}
+        {canOpenTab('reports') && activeTab === 'reports' && <ReportsView />}
 
-        {!isStaff && activeTab === 'timeline' && <BusinessTimelineView />}
+        {canOpenTab('timeline') && activeTab === 'timeline' && <BusinessTimelineView />}
 
         {/* [Cash Flow consolidation — Product Architect decision] Formerly
             three separate tabs (add-expense, add-withdrawal, debts) — see
@@ -199,16 +209,16 @@ function MainApp() {
             Owner-only, same gating debts/add-withdrawal already had;
             add-expense was previously available to Staff too — an
             explicit, accepted trade-off of this consolidation. */}
-        {!isStaff && activeTab === 'cash-flow' && <CashFlowView />}
+        {canOpenTab('cash-flow') && activeTab === 'cash-flow' && <CashFlowView />}
 
         {/* [Business Worth Evolution — Implementation Authorization,
             Increment 5; Specification §13, §33] Owner-only, same gating
             as debts above. */}
-        {!isStaff && activeTab === 'startup-investment' && <StartupInvestmentView />}
+        {canOpenTab('startup-investment') && activeTab === 'startup-investment' && <StartupInvestmentView />}
       </main>
 
       {/* Product Detail Modal */}
-      {!isStaff && selectedDetailProduct && (
+      {canOpenTab('stocks') && selectedDetailProduct && (
         <ProductDetailModal
           product={selectedDetailProduct}
           onClose={() => setSelectedDetailProduct(null)}

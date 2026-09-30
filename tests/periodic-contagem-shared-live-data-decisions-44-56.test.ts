@@ -613,7 +613,9 @@ describe('Finding K — fail-closed listener gating (AppContext.tsx)', () => {
       const idx = contextSource.indexOf(`'${name}'`);
       assert.ok(idx >= 0, `expected a reference to the '${name}' collection path`);
       const nearby = contextSource.slice(Math.max(0, idx - 200), idx + 1600);
-      assert.match(nearby, /if \(isOwner(?:\s*\|\|\s*(?:isManager|canManagerCloseBooks|canManagerManageStaff))?\)/);
+      // Amendment A (Owner-Granted Permissions): still fail-closed on a privilege
+      // check; the check is now `isOwner || can('<area>', 'view')`.
+      assert.match(nearby, /if \(isOwner(?:\s*\|\|\s*(?:isManager|canManagerCloseBooks|canManagerManageStaff|can\('\w+', '\w+'\)))?\)/);
     });
   }
 
@@ -621,8 +623,9 @@ describe('Finding K — fail-closed listener gating (AppContext.tsx)', () => {
     assert.match(contextSource, /if \(isOwner \|\| isManager\) \{\s*\n\s*unsubSubscription = onSnapshot\(/);
   });
 
-  it('closings listener is gated on isOwner || canManagerCloseBooks (matches isOwnerOrGrantedManager)', () => {
-    assert.match(contextSource, /if \(isOwner \|\| canManagerCloseBooks\) \{\s*\n\s*unsubClosings = onSnapshot\(/);
+  it('closings listener is gated on can(closings, view) — owner or granted staff (matches isOwnerOrGrantedManager)', () => {
+    // Amendment A: can() is always true for the owner, so this still covers owner + granted staff.
+    assert.match(contextSource, /if \(can\('closings', 'view'\)\) \{\s*\n\s*unsubClosings = onSnapshot\(/);
   });
 
   it('staff listener is gated on isOwner || canManagerManageStaff, and non-authorized branch still confirms the listener (no infinite loading)', () => {
@@ -1032,7 +1035,7 @@ describe('Bug fix — Area A dirty-flag lifecycle (already-CONFLICT rejection)',
     assert.match(rulesSource, /allow delete: if false;/);
     const idx = contextSource.indexOf("'withdrawals'");
     const nearby = contextSource.slice(Math.max(0, idx - 200), idx + 1600);
-    assert.match(nearby, /if \(isOwner\)/);
+    assert.match(nearby, /if \(isOwner \|\| can\('withdrawals', 'view'\)\)/);
   });
 
   it('the fromCache reconnect nuance is documented as a deliberate, unaddressed limitation, not silently ignored', () => {

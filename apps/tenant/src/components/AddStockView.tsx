@@ -858,7 +858,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     addMultipleStockBatches,
     currencySymbol,
     businessCategory,
-    isStaff,
+    can,
     subscriptionBlocksNewRecords,
     purchaseDraft,
     purchaseDraftLoaded,
@@ -870,6 +870,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     findSemanticSupplierWordingCandidates,
     updateProduct,
   } = useApp();
+  // Owner-Granted Permissions: profit figures follow 'stocks' view; supplier credit creates a payable, so it follows 'cashFlow' act.
+  const canSeeProfit = can('stocks', 'view');
+  const canUseSupplierCredit = can('cashFlow', 'act');
   const { t } = useLanguage();
   // [Product Catalog Phase 2 — Checkpoint 4] Which matched, existing
   // Product (if any) the correction modal is currently open for — null
@@ -3049,7 +3052,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         batchNotes,
         supplierId,
         currentPurchaseEventId,
-        isStaff ? false : supplierCredit
+        canUseSupplierCredit ? supplierCredit : false
       );
 
       const messageText =
@@ -3679,7 +3682,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   for a staff-submitted purchase, so the /payables branch
                   in addMultipleStockBatches simply never fires for
                   staff — exactly the pre-FR-14 behavior for them. */}
-              {!isStaff && (
+              {canUseSupplierCredit && (
                 <label className="flex items-center gap-2 text-[13px] text-[#111827] cursor-pointer">
                   <input
                     type="checkbox"
@@ -3750,7 +3753,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 <div className="col-span-1 text-center">{t('addStock.table.unit')}</div>
                 <div className="col-span-1.5 text-right">{t('addStock.table.buyPrice')}</div>
                 <div className="col-span-1.5 text-right">{t('addStock.table.sellPrice')}</div>
-                {!isStaff ? (
+                {canSeeProfit ? (
                   <div className="col-span-1 text-right">{t('addStock.table.estProfit')}</div>
                 ) : (
                   <div className="col-span-1 text-right">{t('addStock.table.action')}</div>
@@ -4151,7 +4154,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
                         {/* Lucro Estimado & Delete Button */}
                         <div className="col-span-1 flex items-center justify-end gap-1.5">
-                          {!isStaff && (
+                          {canSeeProfit && (
                             <span
                               className={`type-number text-xs tabular-nums ${
                                 rowProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
@@ -4956,7 +4959,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 </button>
 
                 {/* Combined Total Summary Bar */}
-                {!isStaff && (
+                {canSeeProfit && (
                   <div className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-[#B8952F] shrink-0" strokeWidth={2.25} />

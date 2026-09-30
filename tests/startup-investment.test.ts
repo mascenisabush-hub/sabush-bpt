@@ -240,8 +240,8 @@ describe('Firestore rules — source-inspection verification (no emulator availa
 
   it('18. read/create are owner-gated (isOwnerOf(businessId))', () => {
     const block = ruleBlockMatch![1];
-    assert.match(block, /allow read: if isOwnerOf\(businessId\)/);
-    assert.match(block, /allow create: if isOwnerOf\(businessId\)/);
+    assert.match(block, /allow read: if ownerOrPerm\(businessId, 'investments_view'\)/);
+    assert.match(block, /allow create: if ownerOrPerm\(businessId, 'investments_act'\)/);
   });
 
   it('19. update and delete are unconditionally denied (append-only, I-4)', () => {

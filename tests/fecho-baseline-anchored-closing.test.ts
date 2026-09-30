@@ -199,11 +199,13 @@ describe('firestore.rules — closings update-immutability fix (Rule 8 Finding 8
 
   it('4. create remains gated by isOwnerOrGrantedManager, unaffected by the update fix', () => {
     const block = closingsBlock();
-    assert.match(block, /allow read, create: if isOwnerOrGrantedManager\(businessId, 'closings'\);/);
+    assert.match(block, /allow read: if isOwnerOrGrantedManager\(businessId, 'closings'\) \|\| hasPerm\(businessId, 'closings_view'\);/);
+    assert.match(block, /allow create: if isOwnerOrGrantedManager\(businessId, 'closings'\);/);
   });
 
   it('5. update is still gated by isOwnerOf, not opened up to a granted Manager (reopen remains Owner-only, unaffected by this fix)', () => {
     const block = closingsBlock();
-    assert.match(block, /allow update: if isOwnerOf\(businessId\) &&/);
+    // Amendment A: reopening is now owner-or-granted ('closings_act'); still never a plain, un-granted Manager.
+    assert.match(block, /allow update: if ownerOrPerm\(businessId, 'closings_act'\) &&/);
   });
 });

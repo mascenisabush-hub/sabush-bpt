@@ -72,7 +72,7 @@ describe('addOwnerInvestment — closed-period enforcement (client-side half of 
   });
 
   it('still rejects amount <= 0 and still requires isOwner — regression, neither pre-existing check was disturbed', () => {
-    assert.match(addOwnerInvestmentBody, /if \(!isOwner\) throw new Error/);
+    assert.match(addOwnerInvestmentBody, /if \(!can\('investments', 'act'\)\) throw new Error/);
     assert.match(addOwnerInvestmentBody, /if \(!\(Number\(amount\) > 0\)\) throw new Error/);
   });
 
@@ -100,7 +100,7 @@ describe('firestore.rules — ownerInvestments create rule now enforces the clos
   });
 
   it('read/update/delete rules are unchanged — this checkpoint touches only the create rule\'s own conjunction list', () => {
-    assert.match(ruleBody, /allow read: if isOwnerOf\(businessId\);/);
+    assert.match(ruleBody, /allow read: if ownerOrPerm\(businessId, 'investments_view'\);/);
   });
 });
 

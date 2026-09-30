@@ -88,20 +88,20 @@ describe('Product Catalog Phase 1 — Checkpoint A — Catalog surface/navigatio
     });
 
     it("the catalog tab is gated behind !isStaff, the exact same pattern 'stocks' and 'dashboard' already use — Staff cannot reach it", () => {
-      assert.match(appSrc, /!isStaff && activeTab === 'catalog' &&/);
+      assert.match(appSrc, /canOpenTab\('catalog'\) && activeTab === 'catalog' &&/);
       // Regression guard: the pre-existing gates for other Owner-only
       // tabs must still be present, unmodified, alongside the new one.
-      assert.match(appSrc, /!isStaff && activeTab === 'stocks' &&/);
-      assert.match(appSrc, /!isStaff && activeTab === 'dashboard' &&/);
+      assert.match(appSrc, /canOpenTab\('stocks'\) && activeTab === 'stocks' &&/);
+      assert.match(appSrc, /canOpenTab\('dashboard'\) && activeTab === 'dashboard' &&/);
     });
 
     it('ProductCatalogView is mounted with zero props, identical in shape to StocksView\'s own mount — no premature wiring of registration/search callbacks that belong to later checkpoints', () => {
-      assert.match(appSrc, /!isStaff && activeTab === 'catalog' && <ProductCatalogView \/>/);
+      assert.match(appSrc, /canOpenTab\('catalog'\) && activeTab === 'catalog' && <ProductCatalogView \/>/);
     });
 
     it('no other existing tab mount was disturbed — spot-check a sample of pre-existing Owner-only and Staff-accessible tabs still present', () => {
-      assert.match(appSrc, /!isStaff && activeTab === 'stock-count' &&/);
-      assert.match(appSrc, /!isStaff && activeTab === 'declare-worth' &&/);
+      assert.match(appSrc, /canOpenTab\('stock-count'\) && activeTab === 'stock-count' &&/);
+      assert.match(appSrc, /canOpenTab\('declare-worth'\) && activeTab === 'declare-worth' &&/);
       assert.match(appSrc, /activeTab === 'add-stock' &&/);
     });
   });
@@ -168,8 +168,8 @@ describe('Product Catalog Phase 1 — Checkpoint A — Catalog surface/navigatio
     it('both nav-rendering components already filter by ownerOnly generically (not per-tab-id), so the new catalog entry is automatically hidden from Staff with no additional code', () => {
       const navComponentSrc = src('apps/tenant/src/components/NavigationTabs.tsx');
       const headerSrc = src('apps/tenant/src/components/Header.tsx');
-      assert.match(navComponentSrc, /NAV_TABS\.filter\(tab => !tab\.ownerOnly\)/);
-      assert.match(headerSrc, /NAV_TABS\.filter\(tab => !tab\.ownerOnly\)/);
+      assert.match(navComponentSrc, /NAV_TABS\.filter\(tab => canViewTab\(can, tab\.id\)\)/);
+      assert.match(headerSrc, /NAV_TABS\.filter\(tab => canViewTab\(can, tab\.id\)\)/);
     });
   });
 });

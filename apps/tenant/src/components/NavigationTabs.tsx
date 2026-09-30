@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
-import { NAV_TABS, TabType } from '../data/navigationTabs';
+import { NAV_TABS, canViewTab, TabType } from '../data/navigationTabs';
 
 export type { TabType };
 
@@ -15,9 +15,9 @@ interface NavigationTabsProps {
 // fixed bottom bar now — same 11 tabs, same handlers, same source of truth
 // (src/data/navigationTabs.ts) as the header row.
 export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setActiveTab }) => {
-  const { isStaff } = useApp();
+  const { can } = useApp();
   const { t } = useLanguage();
-  const visibleTabs = isStaff ? NAV_TABS.filter(tab => !tab.ownerOnly) : NAV_TABS;
+  const visibleTabs = NAV_TABS.filter(tab => canViewTab(can, tab.id));
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0B1F3A] z-40 px-2 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] shadow-[0_-8px_28px_-6px_rgba(10,28,56,0.35)] border-t border-white/[0.06]">

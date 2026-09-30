@@ -1,3 +1,4 @@
+import type { PermissionArea } from '../../../../packages/shared-types/permissions';
 import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, BarChart3, ClipboardList, Lock, History, Wallet, PiggyBank, Gem, BookOpen } from 'lucide-react';
 
 export type TabType = 'dashboard' | 'stocks' | 'catalog' | 'add-stock' | 'add-quebra' | 'reports' | 'initial-stock' | 'stock-count' | 'declare-worth' | 'closing' | 'timeline' | 'cash-flow' | 'startup-investment';
@@ -60,3 +61,36 @@ export const NAV_TABS: NavTabDefinition[] = [
   { id: 'reports', labelKey: 'nav.tabs.reports.label', shortLabelKey: 'nav.tabs.reports.shortLabel', icon: BarChart3, color: 'indigo', ownerOnly: true },
   { id: 'timeline', labelKey: 'nav.tabs.timeline.label', shortLabelKey: 'nav.tabs.timeline.shortLabel', icon: History, color: 'blue', ownerOnly: true },
 ];
+
+// Owner-Granted Permissions: which permission area gates each tab. A tab is
+// shown/reachable when the person can `view` its area (owners always can).
+// `ownerOnly` above is kept as documentation of the historical default only.
+export const TAB_PERMISSION_AREA: Record<TabType, PermissionArea> = {
+  'dashboard': 'dashboard',
+  'stocks': 'stocks',
+  'catalog': 'catalog',
+  'add-stock': 'addStock',
+  'add-quebra': 'quebras',
+  'reports': 'reports',
+  'initial-stock': 'stockCount',
+  'stock-count': 'stockCount',
+  'declare-worth': 'declareWorth',
+  'closing': 'closings',
+  'timeline': 'timeline',
+  'cash-flow': 'cashFlow',
+  'startup-investment': 'investments',
+};
+
+// The Cash Flow screen also hosts Expenses and Withdrawals sections, so it
+// opens for anyone who may view any of those areas (each section is then
+// shown or hidden on its own inside CashFlowView).
+const TAB_EXTRA_AREAS: Partial<Record<TabType, PermissionArea[]>> = {
+  'cash-flow': ['expenses', 'withdrawals'],
+};
+
+export function canViewTab(
+  can: (area: PermissionArea, level?: 'view' | 'act') => boolean,
+  tab: TabType
+): boolean {
+  return [TAB_PERMISSION_AREA[tab], ...(TAB_EXTRA_AREAS[tab] ?? [])].some(area => can(area, 'view'));
+}

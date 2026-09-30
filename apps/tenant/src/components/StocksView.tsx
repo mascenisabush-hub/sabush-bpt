@@ -42,11 +42,12 @@ export const StocksView: React.FC = () => {
     quebras,
     products,
     business,
-    isOwner,
+    can,
     currencySymbol,
     archivePurchaseBatch,
     unarchivePurchaseBatch,
   } = useApp();
+  const isOwner = can('stocks', 'act');
   const { t } = useLanguage();
 
   const statusLabel = (status: PurchaseBatchStatus) => t(`common.purchaseBatchStatus.${status}`);

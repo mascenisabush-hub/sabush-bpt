@@ -87,7 +87,7 @@ describe('AppContext.tsx — addOwnerInvestment (Checkpoint 1 write path)', () =
   });
 
   it('is Owner-only, client-side (rules are the authoritative backstop)', () => {
-    assert.match(fnBody, /if \(!isOwner\) throw new Error/);
+    assert.match(fnBody, /if \(!can\('investments', 'act'\)\) throw new Error/);
   });
 
   it('rejects amount <= 0 — zero is never valid for Owner Investment, unlike CAIXER', () => {
@@ -188,8 +188,8 @@ describe('firestore.rules — ownerInvestments (Rule 8 Finding OI-1, source-text
     assert.notEqual(start, -1);
     const end = rulesSrc.indexOf('\n      }', start);
     const body = rulesSrc.slice(start, end);
-    assert.match(body, /allow read: if isOwnerOf\(businessId\);/);
-    assert.match(body, /allow create: if isOwnerOf\(businessId\) &&/);
+    assert.match(body, /allow read: if ownerOrPerm\(businessId, 'investments_view'\);/);
+    assert.match(body, /allow create: if ownerOrPerm\(businessId, 'investments_act'\) &&/);
     assert.match(body, /request\.resource\.data\.get\('amount', 0\) > 0 &&/);
     assert.match(body, /request\.resource\.data\.get\('createdBy', null\) == request\.auth\.uid;/);
     assert.match(body, /allow update, delete: if false;/);

@@ -115,6 +115,7 @@ import {
   CashPositionDeclaration,
   ContagemValuationMode,
 } from '../types';
+import { effectivePermissions, permissionKey, type PermissionArea, type PermissionLevel, type PermissionMap } from '../../../../packages/shared-types/permissions';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, resolveActiveBusinessWorthBaselineDate, getLedgerDerivedCashBalance, computeCashReconciliationDifference, computeCaixerTotalLiquidity, computeBusinessWorthCorrectionEligibility, computeBusinessWorthAuthorizedRecoveryEligibility, computeOwnerInvestmentsSinceSnapshot, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
@@ -647,6 +648,13 @@ interface AppContextType {
   isManager: boolean;
   canManagerCloseBooks: boolean;
   canManagerManageStaff: boolean;
+  // Owner-Granted Permissions (spec 16, Amendment A). `can` is always true
+  // for the owner/admin; for staff it reads the owner-granted map (or
+  // today's defaults when the owner never configured it). firestore.rules
+  // is the real authority — this only drives what the UI shows.
+  permissions: PermissionMap;
+  can: (area: PermissionArea, level?: PermissionLevel) => boolean;
+  setStaffPermissions: (staffUid: string, permissions: PermissionMap) => Promise<void>;
   products: Product[];
   // [Stock Count Simplification Amendment v1.0, Part 21] Set only by
   // the products onSnapshot listener's own error callback below —
@@ -1535,6 +1543,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // layer). Fixed here, not a new role model.
   const isOwner = userProfile?.role === 'owner' || userProfile?.role === 'admin';
   const isStaff = userProfile?.role === 'staff';
+  const permissions: PermissionMap = effectivePermissions(userProfile);
 
   // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision 46
   // §1; Decision 54] Derived, never stored client-side as its own
@@ -1560,8 +1569,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Every existing `isStaff` check in the app is unaffected; these three
   // are new, narrower checks used only where Manager delegation applies.
   const isManager = isStaff && userProfile?.staffTier === 'manager';
-  const canManagerCloseBooks = isManager && userProfile?.managerPermissions?.closings === true;
-  const canManagerManageStaff = isManager && userProfile?.managerPermissions?.staffManagement === true;
+  // Effective owner-granted permissions (live: userProfile is a snapshot
+  // listener, so a change by the owner applies on the next render).
+  const can = (area: PermissionArea, level: PermissionLevel = 'view'): boolean =>
+    isOwner || permissions[permissionKey(area, level)] === true;
+  // Kept under their old names for existing consumers; now honour both the
+  // legacy manager grants and the new permissions map.
+  const canManagerCloseBooks = isStaff && permissions.closings_act === true;
+  const canManagerManageStaff = isManager && permissions.staffManagement_act === true;
 
   const MAX_SHOPS_PER_OWNER = 10;
 
@@ -2356,7 +2371,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // read, and reset to the safe empty value on any permission error
     // rather than only logging it.
     let unsubCashLedgerEntries: () => void = () => {};
-    if (isOwner) {
+    if (isOwner || can('cashFlow', 'view')) {
       unsubCashLedgerEntries = onSnapshot(
         cashLedgerEntriesRef,
         (snap) => {
@@ -2375,7 +2390,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const receivablesRef = collection(db, 'businesses', businessId, 'receivables');
     let unsubReceivables: () => void = () => {};
-    if (isOwner) {
+    if (isOwner || can('cashFlow', 'view')) {
       unsubReceivables = onSnapshot(
         receivablesRef,
         (snap) => {
@@ -2395,7 +2410,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const receivablePaymentsRef = collection(db, 'businesses', businessId, 'receivablePayments');
     let unsubReceivablePayments: () => void = () => {};
-    if (isOwner) {
+    if (isOwner || can('cashFlow', 'view')) {
       unsubReceivablePayments = onSnapshot(
         receivablePaymentsRef,
         (snap) => {
@@ -2414,7 +2429,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const payablesRef = collection(db, 'businesses', businessId, 'payables');
     let unsubPayables: () => void = () => {};
-    if (isOwner) {
+    if (isOwner || can('cashFlow', 'view')) {
       unsubPayables = onSnapshot(
         payablesRef,
         (snap) => {
@@ -2434,7 +2449,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const payablePaymentsRef = collection(db, 'businesses', businessId, 'payablePayments');
     let unsubPayablePayments: () => void = () => {};
-    if (isOwner) {
+    if (isOwner || can('cashFlow', 'view')) {
       unsubPayablePayments = onSnapshot(
         payablePaymentsRef,
         (snap) => {
@@ -2456,7 +2471,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // reading) can simply take index 0 rather than re-sorting themselves.
     const cashPositionDeclarationsRef = collection(db, 'businesses', businessId, 'cashPositionDeclarations');
     let unsubCashPositionDeclarations: () => void = () => {};
-    if (isOwner) {
+    if (isOwner || can('cashFlow', 'view')) {
       unsubCashPositionDeclarations = onSnapshot(
         cashPositionDeclarationsRef,
         (snap) => {
@@ -2480,7 +2495,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // receivables' own createdAt-descending convention above.
     const startupInvestmentEntriesRef = collection(db, 'businesses', businessId, 'startupInvestmentEntries');
     let unsubStartupInvestmentEntries: () => void = () => {};
-    if (isOwner) {
+    if (isOwner || can('investments', 'view')) {
       unsubStartupInvestmentEntries = onSnapshot(
         startupInvestmentEntriesRef,
         (snap) => {
@@ -2506,7 +2521,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // that is this collection's own boundary-relevant timestamp.
     const ownerInvestmentsRef = collection(db, 'businesses', businessId, 'ownerInvestments');
     let unsubOwnerInvestments: () => void = () => {};
-    if (isOwner) {
+    if (isOwner || can('investments', 'view')) {
       unsubOwnerInvestments = onSnapshot(
         ownerInvestmentsRef,
         (snap) => {
@@ -2767,7 +2782,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // connectivity-independent guarantee; `firestore.rules` remains
     // the unchanged, authoritative server-side backstop regardless.
     let unsubWithdrawals: () => void = () => {};
-    if (isOwner) {
+    if (isOwner || can('withdrawals', 'view')) {
       const withdrawalsRef = collection(db, 'businesses', businessId, 'withdrawals');
       unsubWithdrawals = onSnapshot(
         withdrawalsRef,
@@ -2827,7 +2842,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // `canManagerCloseBooks` client-side derivation exactly.
     const closingsRef = collection(db, 'businesses', businessId, 'closings');
     let unsubClosings: () => void = () => {};
-    if (isOwner || canManagerCloseBooks) {
+    if (can('closings', 'view')) {
       unsubClosings = onSnapshot(
         closingsRef,
         (snap) => {
@@ -2946,7 +2961,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubStaff();
       unsubTimeline();
     };
-  }, [activeBusinessId]);
+  // permissions can now change while the business stays the same (owner edits them live).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBusinessId, isOwner ? 'owner' : JSON.stringify(permissions)]);
 
   // [Durable Purchase Capture Amendment v1.0] Persistent, per-user
   // Purchase Draft — a SEPARATE, isolated effect from the main
@@ -4927,7 +4944,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // exists even transiently during this checkpoint.
   const addOwnerInvestment = async ({ date, amount, description, submissionId }: AddOwnerInvestmentParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
-    if (!isOwner) throw new Error('Apenas o dono pode registar um investimento do proprietário.');
+    if (!can('investments', 'act')) throw new Error('Apenas o dono pode registar um investimento do proprietário.');
 
     // [Business Worth Evolution — Implementation Authorization,
     // Increment 10 (Revision 3), §23 item 3; Product Architect Decision
@@ -5050,7 +5067,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // sufficient (nothing else needs to change atomically alongside it).
   const addReceivable = async ({ totalAmount, description, debtorName }: { totalAmount: number; description?: string; debtorName?: string }) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
-    if (!isOwner) throw new Error('Apenas o dono pode registar dívidas.');
+    if (!can('cashFlow', 'act')) throw new Error('Apenas o dono pode registar dívidas.');
     if (!(Number(totalAmount) > 0)) throw new Error('O valor da dívida deve ser maior que zero.');
 
     const businessId = activeBusinessId;
@@ -5084,7 +5101,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // un-batched write is sufficient here too.
   const addPayable = async ({ totalAmount, description, supplierName }: { totalAmount: number; description?: string; supplierName?: string }) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
-    if (!isOwner) throw new Error('Apenas o dono pode registar dívidas.');
+    if (!can('cashFlow', 'act')) throw new Error('Apenas o dono pode registar dívidas.');
     if (!(Number(totalAmount) > 0)) throw new Error('O valor da dívida deve ser maior que zero.');
 
     const businessId = activeBusinessId;
@@ -5122,7 +5139,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // caixerBanco).
   const addCashPositionDeclaration = async ({ amount, declaredAt, description }: { amount: number; declaredAt?: string; description?: string }) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
-    if (!isOwner) throw new Error('Apenas o dono pode registar a posição de caixa.');
+    if (!can('cashFlow', 'act')) throw new Error('Apenas o dono pode registar a posição de caixa.');
     if (!(Number(amount) >= 0)) throw new Error('O valor deve ser 0 ou maior.');
 
     const businessId = activeBusinessId;
@@ -5169,7 +5186,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     submissionId?: string;
   }) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
-    if (!isOwner) throw new Error('Apenas o dono pode registar Investimento Inicial.');
+    if (!can('investments', 'act')) throw new Error('Apenas o dono pode registar Investimento Inicial.');
     if (!(Number(amount) > 0)) throw new Error('O valor deve ser maior que zero.');
     const allowedCategories: StartupInvestmentEntry['category'][] = ['labor', 'wages', 'transport', 'preparation', 'license', 'other'];
     if (!allowedCategories.includes(category)) throw new Error('Categoria inválida.');
@@ -5233,7 +5250,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     submissionId: string;
   }): Promise<{ success: boolean; error?: string }> => {
     if (!activeBusinessId) return { success: false, error: 'Sem negócio associado.' };
-    if (!isOwner) return { success: false, error: 'Apenas o dono pode registar pagamentos.' };
+    if (!can('cashFlow', 'act')) return { success: false, error: 'Apenas o dono pode registar pagamentos.' };
     if (!(Number(amountPaid) > 0)) return { success: false, error: 'O valor pago deve ser maior que zero.' };
 
     const businessId = activeBusinessId;
@@ -5352,7 +5369,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     submissionId: string;
   }): Promise<{ success: boolean; error?: string }> => {
     if (!activeBusinessId) return { success: false, error: 'Sem negócio associado.' };
-    if (!isOwner) return { success: false, error: 'Apenas o dono pode registar pagamentos.' };
+    if (!can('cashFlow', 'act')) return { success: false, error: 'Apenas o dono pode registar pagamentos.' };
     if (!(Number(amountPaid) > 0)) return { success: false, error: 'O valor pago deve ser maior que zero.' };
 
     const businessId = activeBusinessId;
@@ -5460,7 +5477,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     submissionId: string;
   }): Promise<{ success: boolean; snapshotId?: string; error?: string }> => {
     if (!activeBusinessId) return { success: false, error: 'Sem negócio associado.' };
-    if (!isOwner) return { success: false, error: 'Apenas o dono pode declarar o Valor do Negócio.' };
+    if (!can('declareWorth', 'act')) return { success: false, error: 'Apenas o dono pode declarar o Valor do Negócio.' };
     if (!(Number(declaredAmount) > 0)) return { success: false, error: 'O valor declarado deve ser maior que zero.' };
 
     const businessId = activeBusinessId;
@@ -7298,7 +7315,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     reason,
   }: RecordInitialStockPriceChangeParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
-    if (!isOwner) throw new Error('Apenas o dono pode registar uma alteração de preço.');
+    if (!can('stockCount', 'act')) throw new Error('Apenas o dono pode registar uma alteração de preço.');
     if (!initialStockCount) throw new Error('O Capital Inicial ainda não foi definido.');
 
     const originalItem = initialStockCount.items.find((i) => i.productId === productId);
@@ -9115,7 +9132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Record). Enforced here and, independently, in firestore.rules.
   const reopenClosing = async (id: string, reason?: string) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
-    if (!isOwner) throw new Error('Apenas o dono pode reabrir um período fechado.');
+    if (!can('closings', 'act')) throw new Error('Apenas o dono pode reabrir um período fechado.');
 
     // [Decision 43 §7 — reopenClosing authoritative target] A listener
     // failure on `closings` must not make a genuine, existing Closing
@@ -9767,6 +9784,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Owner-Granted Permissions — owner-only, server-enforced. The server
+  // cleans the map (known keys, act => view) and is the only writer.
+  const setStaffPermissions = async (staffUid: string, nextPermissions: PermissionMap) => {
+    if (!activeBusinessId || !isOwner) {
+      throw new Error('Apenas o dono pode alterar as permissões de um funcionário.');
+    }
+    if (!currentUser) {
+      throw new Error('A sua sessão expirou. Inicie sessão novamente.');
+    }
+    const idToken = await currentUser.getIdToken();
+    let response: Response;
+    try {
+      response = await fetch('/api/staff/set-permissions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ staffUid, businessId: activeBusinessId, permissions: nextPermissions }),
+      });
+    } catch {
+      throw new Error('Sem ligação ao servidor. Verifique a sua internet e tente novamente.');
+    }
+    if (!response.ok) {
+      let message = 'Erro ao guardar as permissões. Tente novamente.';
+      try {
+        const body = await response.json();
+        if (body?.message) message = body.message;
+      } catch {
+        // response wasn't JSON — keep the generic message
+      }
+      throw new Error(message);
+    }
+  };
+
   const resetStaffPin = async (staffUid: string, newPin: string) => {
     if (!/^\d{6}$/.test(newPin)) {
       throw new Error('O PIN deve ter exatamente 6 dígitos numéricos.');
@@ -10161,6 +10213,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reactivateStaffMember,
         resetStaffPin,
         setStaffTier,
+        setStaffPermissions,
+        permissions,
+        can,
         pairedDevice,
         pairDevice,
         unpairDevice,

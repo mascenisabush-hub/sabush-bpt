@@ -114,7 +114,7 @@ describe('firestore.rules — ownerInvestments create rule now enforces subscrip
   });
 
   it('read rule is unchanged — subscription gating applies to create only, matching every other restricted collection', () => {
-    assert.match(ruleBody, /allow read: if isOwnerOf\(businessId\);/);
+    assert.match(ruleBody, /allow read: if ownerOrPerm\(businessId, 'investments_view'\);/);
   });
 });
 

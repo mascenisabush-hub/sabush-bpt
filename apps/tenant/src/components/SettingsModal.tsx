@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Store, DollarSign, Users, UserPlus, Trash2, X, Check, ShieldCheck, Sparkles, Key, AlertCircle, Edit3, UserMinus, UserX, UserCheck, Loader2, KeyRound, Smartphone, RefreshCw, Lock } from 'lucide-react';
+import { SlidersHorizontal, Store, DollarSign, Users, UserPlus, Trash2, X, Check, ShieldCheck, Sparkles, Key, AlertCircle, Edit3, UserMinus, UserX, UserCheck, Loader2, KeyRound, Smartphone, RefreshCw, Lock } from 'lucide-react';
 import { StaffMember } from '../types';
 import { BUSINESS_CATEGORY_GROUPS } from '../data/businessCategories';
 import { BusinessProfileSetupModal } from './BusinessProfileSetupModal';
 import { BusinessDataResetModal } from './BusinessDataResetModal';
+import { StaffPermissionsModal } from './StaffPermissionsModal';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -68,6 +69,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
   const [activeSection, setActiveSection] = useState<'general' | 'staff'>('general');
   const [showProfileEdit, setShowProfileEdit] = useState(autoOpenProfileEdit);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [staffForPermissions, setStaffForPermissions] = useState<StaffMember | null>(null);
 
   // Staff creation states
   const [staffName, setStaffName] = useState('');
@@ -586,7 +588,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                   Loja: <span className="text-blue-700">{business?.name || '—'}</span>
                 </p>
                 <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                  Os funcionários usam estas credenciais para entrar na aplicação. Eles têm acesso <strong>apenas aos formulários de introdução de Stock e Quebra</strong> e <strong>não conseguem ver preços, custos, margens nem relatórios</strong>. Este funcionário terá acesso <strong>apenas a esta loja</strong> — para adicionar funcionários a outra loja, mude de loja primeiro em "Meu Negócio".
+                  Os funcionários usam estas credenciais para entrar na aplicação. Por defeito têm acesso <strong>apenas aos formulários de introdução de Stock e Quebra</strong> e <strong>não conseguem ver preços, custos, margens nem relatórios</strong>. Este funcionário terá acesso <strong>apenas a esta loja</strong> — para adicionar funcionários a outra loja, mude de loja primeiro em "Meu Negócio".
                 </p>
 
                 {staffError && (
@@ -703,6 +705,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                               A Manager (even one granted staffManagement) never
                               sees this: only the Admin may change staffTier or
                               managerPermissions for any account (BDS #16). */}
+                          {isOwner && (
+                            <button
+                              type="button"
+                              onClick={() => setStaffForPermissions(staff)}
+                              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-500/10 rounded-lg transition"
+                              title="Permissões"
+                            >
+                              <SlidersHorizontal className="w-4 h-4" />
+                            </button>
+                          )}
+
                           {isOwner && (
                             <button
                               type="button"
@@ -1117,6 +1130,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
       )}
 
       {showDataReset && <BusinessDataResetModal onClose={() => setShowDataReset(false)} />}
+
+      {staffForPermissions && (
+        <StaffPermissionsModal
+          staff={staffMembers.find(m => m.uid === staffForPermissions.uid) ?? staffForPermissions}
+          onClose={() => setStaffForPermissions(null)}
+        />
+      )}
 
       {showProfileEdit && (
         <BusinessProfileSetupModal

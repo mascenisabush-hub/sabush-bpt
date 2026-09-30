@@ -87,7 +87,7 @@ describe('addReceivable (AppContext.tsx) — Specification §11, FIN-3', () => {
   });
 
   it('is Owner-only', () => {
-    assert.match(fnBody, /if \(!isOwner\)/);
+    assert.match(fnBody, /if \(!(?:isOwner|can\('\w+', 'act'\))\)/);
   });
 
   it('rejects a non-positive amount before any write', () => {
@@ -114,7 +114,7 @@ describe('recordReceivablePayment (AppContext.tsx) — Specification §11, FR-12
   });
 
   it('is Owner-only and never throws to its caller — reports failure via { success, error }', () => {
-    assert.match(fnBody, /if \(!isOwner\)/);
+    assert.match(fnBody, /if \(!(?:isOwner|can\('\w+', 'act'\))\)/);
     assert.match(fnBody, /catch \(err: any\) \{/);
     const catchBlock = fnBody.slice(fnBody.indexOf('catch (err: any) {'));
     assert.doesNotMatch(catchBlock, /\n\s*throw /);
@@ -160,7 +160,7 @@ describe('recordPayablePayment (AppContext.tsx) — Specification §12, FR-15, I
   });
 
   it('is Owner-only, transactional, idempotent, and overpayment-rejecting — same discipline as recordReceivablePayment', () => {
-    assert.match(fnBody, /if \(!isOwner\)/);
+    assert.match(fnBody, /if \(!(?:isOwner|can\('\w+', 'act'\))\)/);
     assert.match(fnBody, /runTransaction\(db, async \(tx\) => \{/);
     assert.match(fnBody, /doc\(db, 'businesses', businessId, 'payablePayments', submissionId\)/);
     assert.match(fnBody, /if \(existingPaymentSnap\.exists\(\)\) \{/);
@@ -238,8 +238,8 @@ describe('refreshShopWorth — Increment 3 rewire reads payables/cashLedgerEntri
 describe('firestore.rules — Increment 3 collections (Specification §33, tenant isolation, append-only, idempotency)', () => {
   it('cashLedgerEntries: Owner-only read/create, never update/delete (I-4, append-only)', () => {
     const block = extractRulesMatchBlock(rulesSrc, 'match /cashLedgerEntries/{entryId} {');
-    assert.match(block, /allow read: if isOwnerOf\(businessId\);/);
-    assert.match(block, /allow create: if isOwnerOf\(businessId\)/);
+    assert.match(block, /allow read: if ownerOrPerm\(businessId, 'cashFlow_view'\);/);
+    assert.match(block, /allow create: if ownerOrPerm\(businessId, 'cashFlow_act'\)/);
     assert.match(block, /allow update, delete: if false;/);
   });
 

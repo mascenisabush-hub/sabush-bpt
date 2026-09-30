@@ -197,6 +197,7 @@ const PaymentForm: React.FC<{
 
 export const CashFlowView: React.FC = () => {
   const {
+    can,
     currencySymbol,
     receivables,
     payables,
@@ -368,6 +369,8 @@ export const CashFlowView: React.FC = () => {
         <p className="text-xs text-gray-500 mt-1">{t('cashFlow.subtitle')}</p>
       </div>
 
+      {can('cashFlow', 'view') && (
+      <>
       {/* CASH POSITION */}
       <div className="bg-white rounded-[10px] elevation-1 p-4">
         <div className="flex items-center gap-2 mb-1">
@@ -484,7 +487,11 @@ export const CashFlowView: React.FC = () => {
           </div>
         )}
       </div>
+      </>
+      )}
 
+      {can('cashFlow', 'view') && (
+      <>
       {/* RECEIVABLES */}
       <div className="bg-white rounded-[10px] elevation-1 p-4">
         <div className="flex items-center justify-between mb-3">
@@ -603,7 +610,11 @@ export const CashFlowView: React.FC = () => {
           </div>
         )}
       </div>
+      </>
+      )}
 
+      {can('cashFlow', 'view') && (
+      <>
       {/* PAYABLES */}
       <div className="bg-white rounded-[10px] elevation-1 p-4">
         <div className="flex items-center justify-between mb-1">
@@ -743,7 +754,11 @@ export const CashFlowView: React.FC = () => {
           </div>
         )}
       </div>
+      </>
+      )}
 
+      {can('expenses', 'view') && (
+      <>
       {/* [Cash Flow consolidation] EXPENSES — formerly the standalone
           "add-expense" tab. AddExpenseView's own form/submission logic
           is completely unmodified; only onComplete differs (collapses
@@ -778,7 +793,11 @@ export const CashFlowView: React.FC = () => {
           </div>
         )}
       </div>
+      </>
+      )}
 
+      {can('withdrawals', 'view') && (
+      <>
       {/* [Cash Flow consolidation] WITHDRAWALS — formerly the standalone
           "add-withdrawal" tab. Same reasoning as EXPENSES above —
           AddWithdrawalView's own form/submission logic is completely
@@ -812,7 +831,11 @@ export const CashFlowView: React.FC = () => {
           </div>
         )}
       </div>
+      </>
+      )}
 
+      {can('investments', 'view') && (
+      <>
       {/* [Implementation Authorization §45 / AC-OI-UI-1] OWNER INVESTMENT
           — the already-authorized, already-implemented (§23 item 3,
           Checkpoints 1–6) Owner Investment capability's own entry point.
@@ -896,6 +919,8 @@ export const CashFlowView: React.FC = () => {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };

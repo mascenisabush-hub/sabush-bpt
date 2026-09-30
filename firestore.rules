@@ -192,8 +192,7 @@ service cloud.firestore {
     // never a member of this set, by construction, not by a separate
     // stored flag.
     function isActiveContagemEditor(businessId) {
-      return isOwnerOf(businessId) || isCurrentDelegatedEditor(businessId) ||
-        hasPerm(businessId, 'stockCount_act');
+      return isOwnerOf(businessId) || isCurrentDelegatedEditor(businessId);
     }
 
     // [Module #20 Phase 1 (Foundations), Checkpoint 2] `notifications` is
@@ -1542,14 +1541,14 @@ service cloud.firestore {
       // exclusion, since additive rules can only ever grant more
       // access, never less.
       match /stockCountDrafts/{draftId} {
-        allow read: if ownerOrPerm(businessId, 'stockCount_view');
-        allow create, update: if ownerOrPerm(businessId, 'stockCount_act') && subscriptionAllowsNewRecords(businessId) && draftId != 'periodic';
+        allow read: if isOwnerOf(businessId);
+        allow create, update: if isOwnerOf(businessId) && subscriptionAllowsNewRecords(businessId) && draftId != 'periodic';
         // Deleting/clearing the draft (including the delete that happens
         // as part of confirmation) is never subscription-gated, matching
         // every other collection's delete rule in this file — a blocked
         // subscription should never trap an owner unable to clean up
         // their own provisional draft.
-        allow delete: if ownerOrPerm(businessId, 'stockCount_act');
+        allow delete: if isOwnerOf(businessId);
 
         // [Bug fix — per-product independent draft persistence] Each
         // counted row now lives as its OWN document here, rather than
@@ -1561,9 +1560,9 @@ service cloud.firestore {
         // Users-table scoping) — this is a storage-shape change only,
         // not a new access-control surface.
         match /items/{rowKey} {
-          allow read: if ownerOrPerm(businessId, 'stockCount_view');
-          allow create, update: if ownerOrPerm(businessId, 'stockCount_act') && subscriptionAllowsNewRecords(businessId) && draftId != 'periodic';
-          allow delete: if ownerOrPerm(businessId, 'stockCount_act');
+          allow read: if isOwnerOf(businessId);
+          allow create, update: if isOwnerOf(businessId) && subscriptionAllowsNewRecords(businessId) && draftId != 'periodic';
+          allow delete: if isOwnerOf(businessId);
         }
       }
 

@@ -129,8 +129,8 @@ describe('App.tsx — Increment 8 navigation wiring (source-inspection)', () => 
   });
 
   it('the stock-count tab (and therefore this correction/recovery entry point) remains gated behind !isStaff — unauthorized (Staff) users cannot reach it, unchanged from before this increment', () => {
-    assert.match(appSrc, /!isStaff && activeTab === 'stock-count' &&/);
-    assert.match(appSrc, /!isStaff && activeTab === 'dashboard' &&/);
+    assert.match(appSrc, /canOpenTab\('stock-count'\) && activeTab === 'stock-count' &&/);
+    assert.match(appSrc, /canOpenTab\('dashboard'\) && activeTab === 'dashboard' &&/);
   });
 });
 

@@ -34,14 +34,14 @@ const rulesSrc = src('firestore.rules');
 describe('Add Stock — staff supplier-credit permission fix', () => {
   it('confirms the actual root cause still holds in firestore.rules: /payables create requires isOwnerOf, not merely isMemberOf — this is the invariant the UI-level fix must respect, not loosen', () => {
     const payablesBlock = rulesSrc.slice(rulesSrc.indexOf('match /payables/{payableId}'), rulesSrc.indexOf('match /payablePayments'));
-    assert.match(payablesBlock, /allow create: if isOwnerOf\(businessId\)/);
+    assert.match(payablesBlock, /allow create: if ownerOrPerm\(businessId, 'cashFlow_act'\)/);
     assert.doesNotMatch(payablesBlock, /allow create: if isMemberOf\(businessId\)/);
   });
 
   it('the supplier-credit checkbox is now gated behind !isStaff, matching every other owner-only control already established in this file', () => {
     assert.match(
       addStockSrc,
-      /\{!isStaff && \(\s*\n\s*<label className="flex items-center gap-2 text-\[13px\] text-\[#111827\] cursor-pointer">\s*\n\s*<input\s*\n\s*type="checkbox"\s*\n\s*checked=\{supplierCredit\}\s*\n\s*onChange=\{e => setSupplierCredit\(e\.target\.checked\)\}/
+      /\{canUseSupplierCredit && \(\s*\n\s*<label className="flex items-center gap-2 text-\[13px\] text-\[#111827\] cursor-pointer">\s*\n\s*<input\s*\n\s*type="checkbox"\s*\n\s*checked=\{supplierCredit\}\s*\n\s*onChange=\{e => setSupplierCredit\(e\.target\.checked\)\}/
     );
   });
 
@@ -52,7 +52,7 @@ describe('Add Stock — staff supplier-credit permission fix', () => {
   it('the actual addMultipleStockBatches call site defensively re-checks isStaff and forces supplierCredit to false for a staff session, independent of the UI gate above — this file\'s own established "UI gate + defensive re-check at the point of use" pattern', () => {
     const callIdx = addStockSrc.indexOf('const result = await addMultipleStockBatches(');
     const callBlock = addStockSrc.slice(callIdx, callIdx + 400);
-    assert.match(callBlock, /isStaff \? false : supplierCredit/);
+    assert.match(callBlock, /canUseSupplierCredit \? supplierCredit : false/);
   });
 
   it('outstanding-balance warning remains visible regardless of role — it is read-only/informational, never itself the cause of a rejected write, so it correctly keeps no !isStaff gate', () => {

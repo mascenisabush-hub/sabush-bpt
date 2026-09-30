@@ -39,9 +39,9 @@ const SOURCE = readFileSync(new URL('../server/index.ts', import.meta.url), 'utf
 // ---------------------------------------------------------------------
 
 describe('Notification producer count (Phase 2 boundary)', () => {
-  it('has exactly five writeNotification() call sites', () => {
+  it('has exactly six writeNotification() call sites (one per staff endpoint, incl. set-permissions)', () => {
     const matches = SOURCE.match(/await writeNotification\(/g) || [];
-    assert.equal(matches.length, 5, 'Expected exactly five callers — one per staff endpoint. A different count means either a missing endpoint or an unauthorized new producer (Background Worker, Subscription, Closing, Inventory Risk, or Platform Announcement) has been introduced without its own Rule 8 Assessment and Authorization.');
+    assert.equal(matches.length, 6, 'Expected exactly six callers — one per staff endpoint. A different count means either a missing endpoint or an unauthorized new producer (Background Worker, Subscription, Closing, Inventory Risk, or Platform Announcement) has been introduced without its own Rule 8 Assessment and Authorization.');
   });
 
   it('defines writeNotification() itself exactly once, now in server/notificationPlatform.ts (moved there, Phase 3 Checkpoint 2 — not duplicated, not left behind in server/index.ts)', () => {

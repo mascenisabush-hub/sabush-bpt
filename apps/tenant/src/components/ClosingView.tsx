@@ -54,8 +54,9 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
     businessWorth,
     fechoBaselineDate,
     getEstimatedBusinessWorthAsOf,
-    isOwner,
+    can,
   } = useApp();
+  const isOwner = can('closings', 'act');
 
   const now = new Date();
   const [periodType, setPeriodType] = useState<ClosingPeriodType>('monthly');

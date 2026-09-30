@@ -185,7 +185,7 @@ describe('Product Catalog Phase 1 — Checkpoint E — Catalog list/search + Edi
   describe('I — Owner-only access preserved (Checkpoint A\'s own gate, re-verified untouched)', () => {
     it('App.tsx still gates the catalog tab behind !isStaff, unmodified by this checkpoint', () => {
       const appSrc = src('apps/tenant/src/App.tsx');
-      assert.match(appSrc, /!isStaff && activeTab === 'catalog' &&/);
+      assert.match(appSrc, /canOpenTab\('catalog'\) && activeTab === 'catalog' &&/);
     });
   });
 });

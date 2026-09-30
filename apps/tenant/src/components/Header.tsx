@@ -6,7 +6,7 @@ import { SettingsModal } from './SettingsModal';
 import { AvatarCropModal } from './AvatarCropModal';
 import { OwnerPortfolioModal } from './OwnerPortfolioModal';
 import { ShopSwitcher } from './ShopSwitcher';
-import { NAV_TABS, TabType } from '../data/navigationTabs';
+import { NAV_TABS, canViewTab, TabType } from '../data/navigationTabs';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { useLanguage } from '../context/LanguageContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -39,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     userProfile,
     isOwner,
     isStaff,
+    can,
     canManagerManageStaff,
     currencySymbol,
     setCurrencySymbol,
@@ -52,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
   const { t } = useLanguage();
   const { notifications, unreadCount, markAsRead } = useNotifications();
-  const visibleTabs = isStaff ? NAV_TABS.filter(tab => !tab.ownerOnly) : NAV_TABS;
+  const visibleTabs = NAV_TABS.filter(tab => canViewTab(can, tab.id));
 
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
