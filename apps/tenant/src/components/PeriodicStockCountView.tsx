@@ -10283,6 +10283,25 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     );
                   })}
                 </div>
+                {/* [Owner-reported, 2026-09-29] A catalog product counted in
+                    several units (e.g. 3 Cx + 3 Emb + 5 Un) had only a tiny,
+                    faint "+" next to its name to add another unit — in
+                    practice "no way to record it". Same full-width button
+                    manually-added products already have, same handler
+                    (handleAddPortionToManualGroup: pre-filled product,
+                    joins this open product). Shown until the product has
+                    its first extra portion — from then on the portions
+                    section below shows its own button, so never two. */}
+                {visibleManualRowGroups.length === 0 && visibleCatalogEntries[0] && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddPortionToManualGroup(visibleCatalogEntries[0][1].productName)}
+                    className="mt-2 w-full py-2.5 px-3 rounded-lg border border-dashed border-[#D4AF37]/50 bg-[#D4AF37]/[0.04] hover:bg-[#D4AF37]/[0.10] text-[#0B1F3A] font-bold text-[13px] transition-all duration-150 flex items-center justify-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Adicionar Porção (outra unidade)</span>
+                  </button>
+                )}
               </>
             )}
 

@@ -50,7 +50,7 @@ const flushDraftNowAnchor = 'const flushDraftNow = () => {';
 
 describe('App.tsx — confirms the actual mechanism fix #1 targets', () => {
   it('AddStockView is rendered conditionally on activeTab, meaning it fully unmounts on any tab switch away from add-stock', () => {
-    assert.match(appSrc, /\{activeTab === 'add-stock' && \(/);
+    assert.match(appSrc, /\{(?:canOpenTab\('add-stock'\) && )?activeTab === 'add-stock' && \(/);
   });
 });
 
