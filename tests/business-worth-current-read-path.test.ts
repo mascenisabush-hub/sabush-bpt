@@ -407,13 +407,14 @@ describe('getCurrentBusinessWorth — Increment 1 Audit §2: same-day Contagem/a
   });
 });
 
-describe('getCurrentBusinessWorth — Increment 1 Audit §9: Quebras are informational only, never a second subtraction', () => {
-  it('a Quebra after the snapshot reduces embedded profit via remainingQuantity, but is never separately subtracted again', () => {
-    // A batch with 100 units, cost 10, selling 20 -> embedded profit at
-    // full quantity = 100*(20-10) = 1000. A Quebra of 20 units reduces
-    // remainingQuantity to 80 -> embedded profit = 80*(20-10) = 800. The
-    // function has no separate "breakage" subtraction term — Quebra's
-    // effect is folded entirely into the embedded-profit delta.
+describe('getCurrentBusinessWorth — Quebras: lost profit via embedded profit PLUS lost cost as its own term', () => {
+  it('a Quebra after the snapshot lowers worth by its full market value (Owner-approved fix, 2026-09-30; Spec §9 "− Breakages")', () => {
+    // SUPERSEDES the earlier Increment 1 Audit §9 expectation ("never a
+    // separate subtraction", 499800), which under-stated the loss: 20 lost
+    // units cost 10 each, and that COST was never taken out of worth.
+    // Batch 100 units, cost 10, selling 20 -> embedded profit 1000. Quebra
+    // of 20 units: embedded profit 800 (-200, lost profit) and the lost
+    // cost 20*10 = 200 is now subtracted explicitly => 500000 - 200 - 200.
     const snap = makeSnapshot({ measuredBusinessWorth: 500000, embeddedProfitTotal: 1000 });
     const quebra: Quebra = { id: 'q1', batchId: 'b1', productId: 'p1', date: '2026-08-02', quantityLost: 20, reason: 'Damaged', createdAt: '2026-08-02T00:00:00.000Z' };
     const result = call({
@@ -422,10 +423,7 @@ describe('getCurrentBusinessWorth — Increment 1 Audit §9: Quebras are informa
       quebras: [quebra],
       asOfDate: '2026-08-05',
     });
-    // Embedded profit now = 800 (after quebra), snapshot's own = 1000 ->
-    // delta = -200 -> 500000 - 200 = 499800. Never 500000 - 200 - (any
-    // separate quebra-value subtraction) — there is no such term.
-    assert.equal(result, 499800);
+    assert.equal(result, 499600);
   });
 });
 

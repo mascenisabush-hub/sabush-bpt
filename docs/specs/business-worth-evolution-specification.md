@@ -1337,3 +1337,45 @@ No record is excluded from this sum. `OwnerInvestment.date` and `OwnerInvestment
 
 **Product Architect:** SABUSHIMIKE MASCENI
 **Date:** 12 September 2026
+
+
+---
+
+## Amendment — Quebra cost term in live Business Worth (Owner-approved, 2026-09-30)
+
+**Finding.** §9 Case A and Case B both list "− Breakages (Quebras)", but the
+implementation had no such term, reasoning that a Quebra "is already absent
+from what remains to be valued". That holds only for embedded profit: a Quebra
+lowers the batch's remaining quantity and therefore the embedded-profit term,
+yet the lost goods' **cost** stayed inside the frozen snapshot (or, for a
+post-snapshot cash purchase, was never removed because a cash purchase is
+worth-neutral). Every business with Quebras recorded after its last Contagem
+was overstated by the cost of those Quebras.
+
+**Rule (live Business Worth, Case A).**
+
+```
+Latest Contagem (measuredBusinessWorth)
++ embedded profit since it (open batches, after Quebras)
++ Owner Investment since it
++ Receivables actually PAID since it        (customer-payment only; a recorded,
+                                             unpaid receivable contributes 0)
+- Levantamentos since it
+- Quebras since it, at cost (quantityLost x batch costPrice)   <- added
+- Expenses since it                          (salaries and any other cash-out cost)
+± Payables position change                   (unchanged; see below)
+```
+
+Case B subtracts Quebras at cost all-time, like its Expenses/Levantamentos.
+Only Quebras with `createdAt` strictly after the snapshot count in Case A (earlier
+ones are already in the count). Per batch, the subtracted quantity is capped at
+what the batch held.
+
+**Deliberately unchanged.** Paying a supplier for stock already counted does
+not reduce worth a second time: the credit purchase is neutral at cost and the
+payment nets to zero (FIN-5). Subtracting supplier payments as an expense would
+double-count the stock and is not part of this rule.
+
+**Frozen values.** Live figures correct themselves on the next calculation.
+Already-saved Closings and Contagem snapshots are immutable and keep the values
+they were saved with.

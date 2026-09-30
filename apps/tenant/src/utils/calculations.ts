@@ -44,6 +44,44 @@ export function calculateBatch(batch: StockBatch, batchQuebras: Quebra[]): Batch
 }
 
 /**
+ * [Owner-approved fix — Business Worth, 2026-09-30; Specification §9 Case A/B
+ * list "− Breakages (Quebras)" explicitly] Cost of goods lost to Quebras that
+ * must be SUBTRACTED from live Business Worth.
+ *
+ * Why the old "no separate term" reasoning was wrong: a Quebra shrinks the
+ * batch's remaining quantity, which lowers the EMBEDDED PROFIT term — but the
+ * lost goods' own COST is still sitting inside the frozen snapshot (or, for a
+ * post-snapshot purchase, a cash purchase is worth-neutral, so the stock cost
+ * was never taken out of worth). Result: losing 10 units (cost 1,000 each,
+ * selling 1,100) lowered worth by only the 1,000 of profit instead of the
+ * 11,000 market value lost. The profit part stays in the embedded-profit
+ * term; this adds only the missing COST part (quantityLost × batch cost).
+ *
+ * `include` selects which Quebras count (Case A: recorded after the active
+ * snapshot, by precise `createdAt`; Case B: all). Quantity per batch is
+ * capped at what the batch actually held, mirroring calculateBatch's own
+ * `remainingQuantity` floor — an over-logged quebra never subtracts more
+ * than the batch was worth.
+ */
+export function computeQuebraCostLost(
+  batches: StockBatch[],
+  quebras: Quebra[],
+  include: (q: Quebra) => boolean = () => true
+): number {
+  const byBatch = groupQuebrasByBatch(quebras);
+  let total = 0;
+  for (const batch of batches) {
+    const all = byBatch.get(batch.id);
+    if (!all || all.length === 0) continue;
+    const priorQty = all.filter((q) => !include(q)).reduce((sum, q) => sum + Number(q.quantityLost || 0), 0);
+    const includedQty = all.filter(include).reduce((sum, q) => sum + Number(q.quantityLost || 0), 0);
+    const cappedIncluded = Math.min(includedQty, Math.max(0, Number(batch.quantity || 0) - priorQty));
+    total += cappedIncluded * Number(batch.costPrice || 0);
+  }
+  return Number(total.toFixed(2));
+}
+
+/**
  * Groups a Quebra list by batchId once, so callers iterating many batches
  * can look up each batch's quebras in O(1) instead of filtering the full
  * list per batch. Same semantics as `quebras.filter(q => q.batchId === id)`
@@ -586,6 +624,9 @@ function computeCaseALiveBusinessWorth(params: {
       .reduce((sum, w) => sum + Number(w.amount || 0), 0)
       .toFixed(2)
   );
+  // Cost of goods lost to Quebras recorded since the snapshot (Spec §9 Case A
+  // "− Breakages"); see computeQuebraCostLost for why this term is required.
+  const quebrasSinceSnapshot = computeQuebraCostLost(batches, quebras, (q) => isPostSnapshotActivity(q.createdAt));
 
   // [Increment 3] (2) Payables outstanding-balance CHANGE since the
   // snapshot — see this function's own doc comment above.
@@ -667,6 +708,7 @@ function computeCaseALiveBusinessWorth(params: {
       embeddedProfitSinceSnapshot +
       ownerInvestmentsSinceSnapshot -
       expensesSinceSnapshot -
+      quebrasSinceSnapshot -
       levantamentosSinceSnapshot +
       financialPositionChangeSinceSnapshot
     ).toFixed(2)
@@ -767,7 +809,8 @@ export function computeOwnerInvestmentsSinceSnapshot(
  * market value) when nothing else has happened yet — verified as an
  * invariant, not asserted by convention alone.
  *
- * Quebras: no separate term, for the identical reason
+ * Quebras: a separate COST term now exists (computeQuebraCostLost) — the
+ * earlier "no separate term" reasoning was wrong; see that helper. Formerly: for the identical reason
  * `computeCaseALiveBusinessWorth` already documents — a physical loss
  * is already absent from what remains to be valued.
  *
@@ -860,6 +903,8 @@ export function getEstimatedBusinessWorth(params: {
   const totalWithdrawalsAllTime = Number(
     withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0).toFixed(2)
   );
+  // Spec §9 Case B "− Breakages": all-time, like Expenses/Levantamentos here.
+  const totalQuebraCostAllTime = computeQuebraCostLost(batches, quebras);
 
   // [Increment 3] Case B has no snapshot baseline to measure a delta
   // against at all — its baseline (Capital Inicial) predates the Cash
@@ -882,6 +927,7 @@ export function getEstimatedBusinessWorth(params: {
       initialCapitalValue +
       embeddedProfitSinceBaseline -
       totalExpensesAllTime -
+      totalQuebraCostAllTime -
       totalWithdrawalsAllTime +
       financialPositionEffect
     ).toFixed(2)
