@@ -70,6 +70,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
   const [showProfileEdit, setShowProfileEdit] = useState(autoOpenProfileEdit);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [staffForPermissions, setStaffForPermissions] = useState<StaffMember | null>(null);
+  const [permissionsStartFrom, setPermissionsStartFrom] = useState<'manager' | null>(null);
 
   // Staff creation states
   const [staffName, setStaffName] = useState('');
@@ -136,16 +137,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
   // never rendered for a Manager, same as the promote button that opens it.
   const [staffPendingTierChange, setStaffPendingTierChange] = useState<StaffMember | null>(null);
   const [tierDraftIsManager, setTierDraftIsManager] = useState(false);
-  const [tierDraftClosings, setTierDraftClosings] = useState(false);
-  const [tierDraftStaffManagement, setTierDraftStaffManagement] = useState(false);
   const [tierLoading, setTierLoading] = useState(false);
   const [tierError, setTierError] = useState<string | null>(null);
 
   const openTierModal = (staff: StaffMember) => {
     setTierError(null);
     setTierDraftIsManager(staff.staffTier === 'manager');
-    setTierDraftClosings(staff.managerPermissions?.closings === true);
-    setTierDraftStaffManagement(staff.managerPermissions?.staffManagement === true);
     setStaffPendingTierChange(staff);
   };
 
@@ -153,18 +150,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
     if (!staffPendingTierChange) return;
     setTierLoading(true);
     setTierError(null);
+    const target = staffPendingTierChange;
+    const promoting = tierDraftIsManager && target.staffTier !== 'manager';
     try {
       await setStaffTier(
-        staffPendingTierChange.uid,
+        target.uid,
         tierDraftIsManager ? 'manager' : 'staff',
-        tierDraftIsManager ? { closings: tierDraftClosings, staffManagement: tierDraftStaffManagement } : undefined
+        // Promotion starts from the full Manager preset; the owner then trims it in Permissões.
+        tierDraftIsManager
+          ? (promoting
+              ? { closings: true, staffManagement: true }
+              : { closings: target.managerPermissions?.closings === true, staffManagement: target.managerPermissions?.staffManagement === true })
+          : undefined
       );
       setStaffSuccess(
         tierDraftIsManager
-          ? `${staffPendingTierChange.name} agora é Gestor.`
-          : `${staffPendingTierChange.name} voltou ao nível Staff padrão.`
+          ? `${target.name} agora é Gestor.`
+          : `${target.name} voltou ao nível Staff padrão.`
       );
       setStaffPendingTierChange(null);
+      // Last step of promotion: straight into the permission panel, pre-filled with the preset.
+      if (promoting) {
+        setPermissionsStartFrom('manager');
+        setStaffForPermissions({ ...target, staffTier: 'manager' });
+      }
     } catch (err: any) {
       setTierError(err?.message || 'Erro ao atualizar o nível do funcionário.');
     } finally {
@@ -668,7 +677,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               {/* Staff List */}
               <div>
                 <h3 className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-blue-600" /> Lista de Funcionários Ativos ({staffMembers.length})
+                  <ShieldCheck className="w-4 h-4 text-blue-600" /> Lista de Funcionários ({staffMembers.length})
                 </h3>
 
                 {staffMembers.length === 0 ? (
@@ -678,12 +687,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                 ) : (
                   <div className="divide-y divide-gray-200/60 border border-gray-200 rounded-2xl overflow-hidden bg-white">
                     {staffMembers.map(staff => (
-                      <div key={staff.uid} className="p-3 flex items-center justify-between text-xs hover:bg-white/60 transition">
-                        <div>
-                          <span className="font-bold text-gray-800 block">{staff.name}</span>
-                          <span className="text-[11px] text-gray-500 font-mono">{staff.email}</span>
+                      <div key={staff.uid} className="p-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs hover:bg-white/60 transition">
+                        <div className="min-w-0 flex-1 basis-40">
+                          <span className="font-bold text-gray-800 block truncate">{staff.name}</span>
+                          <span className="text-[11px] text-gray-500 font-mono block truncate">{staff.email}</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                           {staff.suspended ? (
                             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-600 border border-orange-500/30">
                               Suspenso
@@ -691,7 +700,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                           ) : staff.staffTier === 'manager' ? (
                             <span
                               className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 border border-purple-500/30"
-                              title={`Fecho: ${staff.managerPermissions?.closings ? 'sim' : 'não'} · Gestão de equipa: ${staff.managerPermissions?.staffManagement ? 'sim' : 'não'}`}
+                              title="Gestor — veja e ajuste em Permissões"
                             >
                               Gestor
                             </span>
@@ -708,7 +717,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                           {isOwner && (
                             <button
                               type="button"
-                              onClick={() => setStaffForPermissions(staff)}
+                              onClick={() => { setPermissionsStartFrom(null); setStaffForPermissions(staff); }}
                               className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-500/10 rounded-lg transition"
                               title="Permissões"
                             >
@@ -727,6 +736,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                             </button>
                           )}
 
+                          {(isOwner || staff.staffTier !== 'manager') && (
                           <button
                             type="button"
                             onClick={() => {
@@ -739,7 +749,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                           >
                             <KeyRound className="w-4 h-4" />
                           </button>
+                          )}
 
+                          {(isOwner || staff.staffTier !== 'manager') && (
+                          <>
                           {staff.suspended ? (
                             <button
                               type="button"
@@ -781,6 +794,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
+                          </>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -803,9 +818,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
       </div>
 
       {staffPendingDeletion && (
-        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+        <div className="modal-overlay z-[60] bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col modal-card">
+            <div className="p-5 border-b border-gray-200 flex items-center gap-3 shrink-0">
               <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center shrink-0">
                 <UserMinus className="w-5 h-5 text-rose-600" />
               </div>
@@ -815,7 +830,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               </div>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div className="bg-white border border-gray-200 rounded-2xl p-3 space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Nome</span>
@@ -861,7 +876,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-200 flex gap-2 justify-end">
+            <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-gray-200 flex gap-2 justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -888,9 +903,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
       )}
 
       {staffPendingSuspension && (
-        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+        <div className="modal-overlay z-[60] bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col modal-card">
+            <div className="p-5 border-b border-gray-200 flex items-center gap-3 shrink-0">
               <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center shrink-0">
                 <UserX className="w-5 h-5 text-orange-600" />
               </div>
@@ -900,7 +915,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               </div>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div className="bg-white border border-gray-200 rounded-2xl p-3 space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Nome</span>
@@ -942,7 +957,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-200 flex gap-2 justify-end">
+            <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-gray-200 flex gap-2 justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -969,9 +984,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
       )}
 
       {staffPendingPinReset && (
-        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+        <div className="modal-overlay z-[60] bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col modal-card">
+            <div className="p-5 border-b border-gray-200 flex items-center gap-3 shrink-0">
               <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
                 <KeyRound className="w-5 h-5 text-blue-600" />
               </div>
@@ -981,7 +996,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               </div>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div>
                 <label className="text-[11px] font-bold text-gray-600 mb-1 block">Novo PIN (6 dígitos)</label>
                 <input
@@ -1007,7 +1022,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-200 flex gap-2 justify-end">
+            <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-gray-200 flex gap-2 justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -1034,9 +1049,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
       )}
 
       {staffPendingTierChange && (
-        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+        <div className="modal-overlay z-[60] bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col modal-card">
+            <div className="p-5 border-b border-gray-200 flex items-center gap-3 shrink-0">
               <div className="w-10 h-10 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
                 <ShieldCheck className="w-5 h-5 text-purple-600" />
               </div>
@@ -1046,12 +1061,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               </div>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
               <label className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-200 cursor-pointer">
                 <div>
                   <span className="text-xs font-bold text-gray-800 block">Promover a Gestor</span>
                   <span className="text-[11px] text-gray-500">
-                    Continua a ser uma conta Staff — apenas ganha as permissões que escolher abaixo.
+                    Continua a ser uma conta de funcionário — o dono decide depois o que pode ver e fazer.
                   </span>
                 </div>
                 <input
@@ -1063,37 +1078,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               </label>
 
               {tierDraftIsManager && (
-                <div className="space-y-2 pl-1">
-                  <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">Permissões concedidas</p>
-
-                  <label className="flex items-center justify-between gap-3 p-3 bg-white border border-gray-200 rounded-2xl cursor-pointer">
-                    <div>
-                      <span className="text-xs font-bold text-gray-800 block">Fecho Periódico (Closings)</span>
-                      <span className="text-[11px] text-gray-500">Pode realizar o Fecho Mensal/Anual em seu nome.</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={tierDraftClosings}
-                      onChange={e => setTierDraftClosings(e.target.checked)}
-                      className="w-5 h-5 accent-purple-600 shrink-0"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between gap-3 p-3 bg-white border border-gray-200 rounded-2xl cursor-pointer">
-                    <div>
-                      <span className="text-xs font-bold text-gray-800 block">Gestão de Equipa</span>
-                      <span className="text-[11px] text-gray-500">
-                        Pode adicionar, suspender, reativar e remover Staff — nunca outro Gestor nem a sua conta.
-                      </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={tierDraftStaffManagement}
-                      onChange={e => setTierDraftStaffManagement(e.target.checked)}
-                      className="w-5 h-5 accent-purple-600 shrink-0"
-                    />
-                  </label>
-                </div>
+                <p className="text-[11px] text-gray-600 bg-purple-50 border border-purple-200 rounded-xl p-3 leading-relaxed">
+                  Um Gestor começa com <strong>todas as permissões</strong> (excepto as sempre reservadas ao dono:
+                  repor dados, alterar permissões, subscrição, lojas e credenciais). Depois de guardar abre-se o painel de
+                  <strong> Permissões</strong> para desligar o que não quiser que esta pessoa veja ou faça.
+                </p>
               )}
 
               {tierError && (
@@ -1103,7 +1092,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-200 flex gap-2 justify-end">
+            <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-gray-200 flex gap-2 justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -1134,7 +1123,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
       {staffForPermissions && (
         <StaffPermissionsModal
           staff={staffMembers.find(m => m.uid === staffForPermissions.uid) ?? staffForPermissions}
-          onClose={() => setStaffForPermissions(null)}
+          startFromManagerPreset={permissionsStartFrom === 'manager'}
+          onClose={() => { setStaffForPermissions(null); setPermissionsStartFrom(null); }}
         />
       )}
 

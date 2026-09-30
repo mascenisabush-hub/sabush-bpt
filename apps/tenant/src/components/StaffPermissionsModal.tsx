@@ -16,6 +16,8 @@ import {
 interface Props {
   staff: StaffMember;
   onClose: () => void;
+  // Right after a promotion the live profile may not have synced yet: start from the Manager preset.
+  startFromManagerPreset?: boolean;
 }
 
 // Human labels for each permission area (Portuguese, like the rest of Settings).
@@ -37,12 +39,15 @@ const AREA_LABELS: Array<{ area: PermissionArea; label: string; hint: string; gr
   { group: 'Equipa', area: 'staffManagement', label: 'Gerir funcionários', hint: 'Adicionar, suspender e remover funcionários (só gestores)' },
 ];
 
-export const StaffPermissionsModal: React.FC<Props> = ({ staff, onClose }) => {
+export const StaffPermissionsModal: React.FC<Props> = ({ staff, onClose, startFromManagerPreset }) => {
   const { setStaffPermissions } = useApp();
   const isManager = staff.staffTier === 'manager';
 
   const [draft, setDraft] = useState<PermissionMap>(() =>
-    normalizePermissions(effectivePermissions({ role: 'staff', ...staff }), { isManager })
+    normalizePermissions(
+      startFromManagerPreset ? MANAGER_PRESET_PERMISSIONS : effectivePermissions({ role: 'staff', ...staff }),
+      { isManager }
+    )
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
