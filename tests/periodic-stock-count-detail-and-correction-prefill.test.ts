@@ -102,6 +102,12 @@ describe('PeriodicStockCountView.tsx — correction/recovery mode faithfully res
   const effectStart = src.indexOf('  useEffect(() => {\n    if (!pendingBusinessWorthCorrection) {');
   const effectEnd = src.indexOf('\n  }, [pendingBusinessWorthCorrection, latestActiveBusinessWorthSnapshot, stockCounts, products]);', effectStart);
   const effectBody = src.slice(effectStart, effectEnd);
+  // [2026-09-29] The restoration logic moved, unchanged in structure, into
+  // lib/periodicCorrectionPrefill.ts (buildCorrectionPrefill) so its RESULT
+  // can be tested against the confirmed value
+  // (tests/correction-prefill-reproduces-confirmed-value.test.ts).
+  const prefillSrc = readFileSync(new URL('../apps/tenant/src/lib/periodicCorrectionPrefill.ts', import.meta.url), 'utf-8');
+  const prefillBody = prefillSrc.slice(prefillSrc.indexOf('export function buildCorrectionPrefill('));
 
   it('the recovery effect is found in the source, well-formed', () => {
     assert.notEqual(effectStart, -1, 'expected to locate the correction-prefill useEffect');
@@ -132,57 +138,61 @@ describe('PeriodicStockCountView.tsx — correction/recovery mode faithfully res
   });
 
   it('[TEST 1 / TEST 2 — completeness] iterates every item in sourceCount.items exactly once — nothing is filtered out before the restoration decision is made', () => {
-    assert.match(effectBody, /sourceCount\.items\.forEach\(\(item, index\) => \{/);
+    assert.match(effectBody, /buildCorrectionPrefill\(sourceCount\.items, catalogRows,/);
+    assert.match(prefillBody, /items\.forEach\(\(item, index\) => \{/);
   });
 
   it('[TEST 3 — multiple portions] the FIRST occurrence of a productId in this pass may claim the catalogRows slot; a claimed slot is tracked and never reused within the same pass', () => {
-    assert.match(effectBody, /const claimedThisPass = new Set<string>\(\);/);
-    assert.match(effectBody, /const existing = !claimedThisPass\.has\(item\.productId\) \? next\[item\.productId\] : undefined;/);
-    assert.match(effectBody, /claimedThisPass\.add\(item\.productId\);/);
+    assert.match(prefillBody, /const claimedThisPass = new Set<string>\(\);/);
+    assert.match(prefillBody, /const existing = !claimedThisPass\.has\(item\.productId\) \? next\[item\.productId\] : undefined;/);
+    assert.match(prefillBody, /claimedThisPass\.add\(item\.productId\);/);
   });
 
   it('[TEST 3 / TEST 4 / TEST 8 — no overwrite] a productId whose slot is already claimed this pass is pushed to overflowItems, never re-entering the catalogRows write for a second time', () => {
-    assert.match(effectBody, /overflowItems\.push\(item\);/);
+    assert.match(prefillBody, /overflowItems\.push\(item\);/);
     // The catalogRows write only ever happens inside the `if (!existing)
     // { overflowItems.push(item); return; }` branch's else-path — i.e.
     // exactly once per productId per pass, confirmed by claimedThisPass
     // being consulted (asserted above) before this assignment is ever
     // reached for a given productId.
-    assert.match(effectBody, /claimedThisPass\.add\(item\.productId\);\s*next\[item\.productId\] = \{/);
+    assert.match(prefillBody, /claimedThisPass\.add\(item\.productId\);\s*const unit = item\.unit \|\| existing\.unit;\s*next\[item\.productId\] = \{/);
   });
 
   it('[TEST 8 / TEST 9 — manual-row restoration, catalog-change safety] overflow items are restored via setManualRows, using the SAME productId: undefined convention handleAddPortionToManualGroup already uses — never a new row kind', () => {
-    assert.match(effectBody, /setManualRows\(\(prevManual\) => \[/);
-    assert.match(effectBody, /\.\.\.prevManual,/);
-    assert.match(effectBody, /productId: undefined,/);
-    assert.match(effectBody, /productName: item\.productName,/);
+    assert.match(effectBody, /setManualRows\(\(prevManual\) => \[\.\.\.prevManual, \.\.\.prefill\.extraManualRows\]\)/);
+    // [2026-09-29] Was `productId: undefined`; the portion now stays linked
+    // to its product (`item.productId || undefined`) and gets a stable key.
+    assert.match(prefillBody, /productId: item\.productId \|\| undefined,/);
+    assert.match(prefillBody, /sourceRowKey: makeManualRowKey\(\),/);
+    assert.match(prefillBody, /productName: item\.productName,/);
   });
 
   it('a restored manual-row portion preserves quantity/unit/costPrice/sellingPrice/sellingPriceBasisUnit from the confirmed item, and is marked deliberate (never the product-level default)', () => {
-    assert.match(effectBody, /quantity: String\(item\.quantity\),/);
-    assert.match(effectBody, /unit: item\.unit \|\| 'un',/);
-    assert.match(effectBody, /costPrice: String\(item\.costPrice\),/);
-    assert.match(effectBody, /sellingPrice: item\.sellingPrice != null \? String\(item\.sellingPrice\) : '',/);
-    assert.match(effectBody, /sellingPriceAutoFilled: false,/);
-    assert.match(effectBody, /sellingPriceBasisUnit: item\.sellingPriceBasisUnit \?\? item\.unit,/);
+    assert.match(prefillBody, /quantity: String\(item\.quantity\),/);
+    assert.match(prefillBody, /unit: item\.unit \|\| 'un',/);
+    assert.match(prefillBody, /costPrice: String\(item\.costPrice\),/);
+    assert.match(prefillBody, /sellingPrice: item\.sellingPrice != null \? String\(item\.sellingPrice\) : '',/);
+    assert.match(prefillBody, /sellingPriceAutoFilled: false,/);
+    assert.match(prefillBody, /sellingPriceBasisUnit: item\.sellingPriceBasisUnit \?\? \(item\.unit \|\| 'un'\),/);
   });
 
   it('the claimed catalogRows slot preserves quantity/unit/costPrice/sellingPrice from the source item, exactly as the original implementation did', () => {
-    assert.match(effectBody, /quantity: String\(item\.quantity\)/);
-    assert.match(effectBody, /costPrice: String\(item\.costPrice\)/);
-    assert.match(effectBody, /sellingPrice: item\.sellingPrice != null/);
+    assert.match(prefillBody, /quantity: String\(item\.quantity\)/);
+    assert.match(prefillBody, /costPrice: String\(item\.costPrice\)/);
+    assert.match(prefillBody, /sellingPrice: item\.sellingPrice != null/);
   });
 
   it('[TEST 12 — no historical mutation] this effect only ever calls setCatalogRows/setManualRows (local React state) — it contains no write to any StockCount/BusinessWorthSnapshot document', () => {
     assert.doesNotMatch(effectBody, /updateDoc|setDoc|deleteDoc|writeBatch|runTransaction/);
+    assert.doesNotMatch(prefillBody, /updateDoc|setDoc|deleteDoc|writeBatch|runTransaction/);
   });
 
   it('[TEST 13 — prefill timing] originalOrder is recorded for every item regardless of which structure it lands in, independent of hydration timing', () => {
-    assert.match(effectBody, /originalOrder\[item\.productId\] = index;/);
+    assert.match(prefillBody, /originalOrder\[item\.productId\] = index;/);
   });
 
   it('tracks a defensive-only missing count for a genuinely unrecoverable item (no product name) — no longer used for "deleted from catalog," which now recovers via manualRows', () => {
-    assert.match(effectBody, /if \(!item\.productName \|\| !item\.productName\.trim\(\)\) \{/);
+    assert.match(prefillBody, /if \(!item\.productName \|\| !item\.productName\.trim\(\)\) \{/);
     assert.match(src, /const \[correctionPrefillMissingCount, setCorrectionPrefillMissingCount\] = useState\(0\);/);
   });
 

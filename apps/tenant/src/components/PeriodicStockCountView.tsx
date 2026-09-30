@@ -44,6 +44,7 @@ import {
 } from '../lib/periodicContagemRecovery';
 import { isSnapshotFromEarlierLifecycle } from '../lib/periodicContagemRecovery';
 import RecoveryEvidenceReview, { type RecoveryEvidenceEntry } from './RecoveryEvidenceReview';
+import { buildCorrectionPrefill } from '../lib/periodicCorrectionPrefill';
 import { buildProductDisplayGroups, filterGroupsBySearch, type ProductDisplayGroup, type GroupableUnifiedEntry } from '../lib/periodicContagemGroupedView';
 import { derivePeriodicRowPersistenceState, type PeriodicRowPersistenceState } from '../lib/periodicContagemPersistenceState';
 import { detectShopSwitch } from '../lib/shopSwitchGuard';
@@ -2263,65 +2264,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (products.length === 0) return; // catalog not loaded yet — try again next render
 
     correctionPrefillAppliedForRef.current = pendingBusinessWorthCorrection.snapshotId;
-    let missingCount = 0;
-    const originalOrder: Record<string, number> = {};
-    // Items that couldn't claim a catalogRows slot (either because that
-    // productId's slot was already claimed by an earlier portion in
-    // THIS SAME restoration pass, or because no catalogRows entry
-    // exists for it at all) — captured here, outside the setCatalogRows
-    // updater below, so they can be turned into manualRows entries in a
-    // second, separate state update immediately after.
-    const overflowItems: StockCountItem[] = [];
-    setCatalogRows((prev) => {
-      const next = { ...prev };
-      const claimedThisPass = new Set<string>();
-      sourceCount.items.forEach((item, index) => {
-        // Recorded regardless of whether the product still exists in the
-        // catalog, or which structure ultimately holds this portion —
-        // this map's only job is "what position was this productId at
-        // in the original record."
-        originalOrder[item.productId] = index;
-        if (!item.productName || !item.productName.trim()) {
-          // Defensive only — should not occur for a genuinely confirmed
-          // record; a StockCountItem with no product name at all cannot
-          // be restored into either structure.
-          missingCount += 1;
-          return;
-        }
-        const existing = !claimedThisPass.has(item.productId) ? next[item.productId] : undefined;
-        if (!existing) {
-          overflowItems.push(item);
-          return;
-        }
-        claimedThisPass.add(item.productId);
-        next[item.productId] = {
-          ...existing,
-          quantity: String(item.quantity),
-          unit: item.unit || existing.unit,
-          costPrice: String(item.costPrice),
-          sellingPrice: item.sellingPrice != null ? String(item.sellingPrice) : existing.sellingPrice,
-        };
-      });
-      return next;
-    });
-    if (overflowItems.length > 0) {
-      setManualRows((prevManual) => [
-        ...prevManual,
-        ...overflowItems.map((item): StockCountWorkingRow => ({
-          productId: undefined,
-          productName: item.productName,
-          quantity: String(item.quantity),
-          unit: item.unit || 'un',
-          costPrice: String(item.costPrice),
-          sellingPrice: item.sellingPrice != null ? String(item.sellingPrice) : '',
-          // A restored confirmed portion is, by definition, an already-
-          // deliberately-entered value — never the product-level
-          // default a brand-new blank row would start at.
-          sellingPriceAutoFilled: false,
-          sellingPriceBasisUnit: item.sellingPriceBasisUnit ?? item.unit,
-        })),
-      ]);
+    // [Bug fix] Pure, tested pre-fill (lib/periodicCorrectionPrefill.ts):
+    // reproduces the confirmed count exactly (price units, deliberate
+    // prices, validated rows, stable keys for extra portions).
+    const prefill = buildCorrectionPrefill(sourceCount.items, catalogRows, () => `manual:${crypto.randomUUID()}`);
+    const missingCount = prefill.missingCount;
+    const originalOrder = prefill.originalOrder;
+    setCatalogRows(prefill.catalogRows);
+    if (prefill.extraManualRows.length > 0) {
+      setManualRows((prevManual) => [...prevManual, ...prefill.extraManualRows]);
     }
+    // Anything validated during the correction is newer than every
+    // pre-filled row (list order: most recent first).
+    entrySequenceRef.current = Math.max(entrySequenceRef.current, sourceCount.items.length);
     correctionOriginalOrderRef.current = originalOrder;
     setCorrectionPrefillMissingCount(missingCount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
