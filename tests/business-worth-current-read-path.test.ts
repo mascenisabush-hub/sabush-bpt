@@ -164,7 +164,7 @@ describe('getCurrentBusinessWorth — §41: Current Business Worth is LIVE, not 
     const result = call({
       snapshots: [snap],
       // A new batch not present at snapshot time: embedded profit = 10*(80-50) = 300
-      batches: [makeBatch({ id: 'new-batch', quantity: 10, costPrice: 50, sellingPrice: 80 })],
+      batches: [makeBatch({ id: 'new-batch', quantity: 10, costPrice: 50, sellingPrice: 80, createdAt: '2026-08-02T00:00:00.000Z' })],
       asOfDate: '2026-08-05',
     });
     assert.equal(result, 500300);
@@ -225,7 +225,7 @@ describe('getCurrentBusinessWorth — §41: Current Business Worth is LIVE, not 
     });
     const result = call({
       snapshots: [snap],
-      batches: [makeBatch({ id: 'new-batch', quantity: 10, costPrice: 50, sellingPrice: 80 })], // +300 embedded profit
+      batches: [makeBatch({ id: 'new-batch', quantity: 10, costPrice: 50, sellingPrice: 80, createdAt: '2026-08-02T00:00:00.000Z' })], // +300 embedded profit
       expenses: [{ id: 'e1', date: '2026-08-03', description: 'Rent', amount: 5000, createdAt: '2026-08-03T00:00:00.000Z' }],
       withdrawals: [{ id: 'w1', date: '2026-08-04', amount: 2000, createdAt: '2026-08-04T00:00:00.000Z' }],
       asOfDate: '2026-08-05',
@@ -250,7 +250,7 @@ describe('getCurrentBusinessWorth — BDR Decision 15/16 worked example (cash-fi
     // (selling 30 - cost 25) = 1000*5 = 5000.
     const result = call({
       snapshots: [snap],
-      batches: [makeBatch({ id: 'purchase', quantity: 1000, costPrice: 25, sellingPrice: 30 })],
+      batches: [makeBatch({ id: 'purchase', quantity: 1000, costPrice: 25, sellingPrice: 30, createdAt: '2026-08-02T00:00:00.000Z' })],
       asOfDate: '2026-08-05',
     });
     assert.notEqual(result, 480000);
@@ -272,7 +272,7 @@ describe('getCurrentBusinessWorth — Increment 1 Audit §2: same-day Contagem/a
     });
     const result = call({
       snapshots: [snap],
-      batches: [makeBatch({ id: 'same-day-purchase', quantity: 10, costPrice: 50, sellingPrice: 80 })], // +300
+      batches: [makeBatch({ id: 'same-day-purchase', quantity: 10, costPrice: 50, sellingPrice: 80, createdAt: '2026-05-01T12:00:00.000Z' })], // +300
       asOfDate: '2026-05-01',
     });
     assert.equal(result, 500300);
@@ -286,7 +286,7 @@ describe('getCurrentBusinessWorth — Increment 1 Audit §2: same-day Contagem/a
     });
     const result = call({
       snapshots: [snap],
-      batches: [makeBatch({ id: 'same-day-purchase', quantity: 10, costPrice: 50, sellingPrice: 80 })],
+      batches: [makeBatch({ id: 'same-day-purchase', quantity: 10, costPrice: 50, sellingPrice: 80, createdAt: '2026-05-01T12:00:00.000Z' })],
       asOfDate: '2026-05-02',
     });
     assert.equal(result, 500300);

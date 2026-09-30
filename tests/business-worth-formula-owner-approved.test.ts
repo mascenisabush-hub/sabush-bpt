@@ -45,4 +45,40 @@ describe('live Business Worth — owner-approved formula', () => {
     const paid: any = { id: 'c2', category: 'supplier-payment', direction: 'outflow', amount: 10000, createdAt: '2026-09-16T10:00:00Z' };
     assert.equal(worth({ payables: [payable], cashLedgerEntries: [paid] }), 510000);
   });
+
+  // ---- Purchase profit must accumulate; restocking closes the old batch ----
+  const mk = (id: string, status: string, qty: number, cost: number, sell: number, createdAt: string): any =>
+    ({ id, productId: 'p1', quantity: qty, costPrice: cost, sellingPrice: sell, status, createdAt, dateEntered: createdAt.slice(0, 10) });
+  const snapWithOld: any = { ...snap, embeddedProfitTotal: 1000 };
+  const A = (status: string) => mk('A', status, 100, 10, 20, '2026-08-20T10:00:00Z'); // existed at the count, profit 1,000 already inside it
+  const B1 = (status: string) => mk('B1', status, 100, 10, 25, '2026-09-05T10:00:00Z'); // profit 1,500
+  const B2 = (status: string) => mk('B2', status, 50, 10, 30, '2026-09-12T10:00:00Z'); // profit 1,000
+  const w2 = (batches: any[], over: Record<string, unknown> = {}) =>
+    getEstimatedBusinessWorth({ snapshots: [snapWithOld], initialStockCount: null, asOfDate: '2026-09-30', quebras: [], expenses: [], withdrawals: [], batches, ...over } as any);
+
+  it('nothing bought since the count: worth equals the count', () => {
+    assert.equal(w2([A('open')]), 500000);
+  });
+  it('a restock (old batch closed, new one open) ADDS the new purchase profit — the old batch profit is not erased', () => {
+    assert.equal(w2([A('closed'), B1('open')]), 501500);
+  });
+  it('every purchase since the count adds its profit, even after later purchases closed the earlier ones', () => {
+    assert.equal(w2([A('closed'), B1('closed'), B2('open')]), 502500);
+  });
+  it('a Quebra on a batch that existed at the count removes its full selling value (qty x selling price)', () => {
+    // 10 units x selling 20 = 200
+    assert.equal(w2([A('open')], { quebras: [q('qa', 10, '2026-09-10T10:00:00Z')].map((x) => ({ ...x, batchId: 'A' })) }), 500000 - 200);
+  });
+  it('a Quebra on a purchase made after the count removes its full selling value, even if that batch was later closed', () => {
+    // B1: +1,500 profit; 20 lost x selling 25 = 500 lost in total vs. no quebra => net +1,000 after cost/profit split
+    const lost = [{ ...q('qb', 20, '2026-09-15T10:00:00Z'), batchId: 'B1' }];
+    const without = w2([A('closed'), B1('closed'), B2('open')]);
+    const withQ = w2([A('closed'), B1('closed'), B2('open')], { quebras: lost });
+    assert.equal(without - withQ, 20 * 25);
+  });
+  it('a purchase on credit is neutral at cost; only its embedded profit counts', () => {
+    const payable: any = { id: 'pay1', amountRemaining: 1000, totalAmount: 1000, sourcePurchaseBatchId: 'pb1', createdAt: '2026-09-05T10:00:00Z' };
+    assert.equal(w2([A('closed'), B1('open')], { payables: [payable] }), 501500);
+  });
 });
+

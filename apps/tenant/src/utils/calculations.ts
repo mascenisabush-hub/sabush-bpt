@@ -82,6 +82,54 @@ export function computeQuebraCostLost(
 }
 
 /**
+ * [Owner-approved fix — Business Worth, 2026-09-30] Embedded profit that live
+ * Business Worth has gained since a baseline moment, counting EVERY purchase.
+ *
+ * The old code used `open-batch profit now − profit frozen at the snapshot`.
+ * Restocking a product CLOSES its previous open batch (addMultipleStockBatches),
+ * so that batch's profit silently left the "open" sum and live worth FELL (or
+ * failed to grow) every time a product was bought again before a new count.
+ * Owner rule: each purchase's embedded profit is added when the purchase is
+ * made and stays; closing a batch never removes it.
+ *
+ *   gained = Σ profit of batches created AFTER the baseline (open OR closed,
+ *            net of their Quebras — a Quebra's lost profit is taken out here)
+ *          − profit lost to Quebras recorded AFTER the baseline on batches that
+ *            already existed at the baseline (their remaining profit is
+ *            already inside the baseline's own counted value).
+ */
+export function computeEmbeddedProfitGainedSince(
+  batches: StockBatch[],
+  quebras: Quebra[],
+  baselineMillis: number,
+  asOfMillis: number
+): number {
+  const byBatch = groupQuebrasByBatch(quebras);
+  let total = 0;
+  for (const batch of batches) {
+    // createdAt is a required field; dateEntered is only a legacy fallback.
+    // A batch with NO usable timestamp is treated as already existing at the
+    // baseline (contributes no NEW profit) — never guessed as a new purchase.
+    let createdMillis = new Date(batch.createdAt).getTime();
+    if (!Number.isFinite(createdMillis) && batch.dateEntered) createdMillis = new Date(`${batch.dateEntered}T00:00:00.000Z`).getTime();
+    const batchQuebras = byBatch.get(batch.id) ?? [];
+    if (Number.isFinite(createdMillis) && createdMillis > baselineMillis) {
+      if (createdMillis > asOfMillis) continue;
+      total += calculateBatch(batch, batchQuebras).embeddedProfit;
+    } else {
+      const lostQty = batchQuebras
+        .filter((q) => {
+          const t = new Date(q.createdAt).getTime();
+          return t > baselineMillis && t <= asOfMillis;
+        })
+        .reduce((sum, q) => sum + Number(q.quantityLost || 0), 0);
+      total -= Math.min(lostQty, Number(batch.quantity || 0)) * (Number(batch.sellingPrice || 0) - Number(batch.costPrice || 0));
+    }
+  }
+  return Number(total.toFixed(2));
+}
+
+/**
  * Groups a Quebra list by batchId once, so callers iterating many batches
  * can look up each batch's quebras in O(1) instead of filtering the full
  * list per batch. Same semantics as `quebras.filter(q => q.batchId === id)`
@@ -594,13 +642,7 @@ function computeCaseALiveBusinessWorth(params: {
   // baseline, which is the correct, honest reading: an Owner-Declared
   // establishment never measured a batch-ledger embedded-profit figure
   // to begin with, so there is no non-zero baseline to subtract.
-  const currentEmbeddedProfitTotal = calculateInventoryTotals(
-    batches.filter((b) => b.status === 'open'),
-    quebras
-  ).totalEmbeddedProfit;
-  const embeddedProfitSinceSnapshot = Number(
-    (currentEmbeddedProfitTotal - (latest.embeddedProfitTotal ?? 0)).toFixed(2)
-  );
+  const embeddedProfitSinceSnapshot = computeEmbeddedProfitGainedSince(batches, quebras, snapshotMillis, asOfMillis);
 
   // [Corrected] createdAt (a precise timestamp) vs confirmedAt (a precise
   // timestamp) — never date (a calendar day) vs confirmedAt. A record's
@@ -889,10 +931,9 @@ export function getEstimatedBusinessWorth(params: {
   // margin for a 'selling'-basis one.
   const initialMarginAlreadyIncludedInBaseline = basis === 'selling' ? initialSellingTotal - initialCostTotal : 0;
 
-  const currentEmbeddedProfitTotal = calculateInventoryTotals(
-    batches.filter((b) => b.status === 'open'),
-    quebras
-  ).totalEmbeddedProfit;
+  // Owner rule: every purchase's embedded profit counts, open or closed —
+  // restocking closes the previous batch but must not erase its profit.
+  const currentEmbeddedProfitTotal = calculateInventoryTotals(batches, quebras).totalEmbeddedProfit;
   const embeddedProfitSinceBaseline = Number(
     (currentEmbeddedProfitTotal - initialMarginAlreadyIncludedInBaseline).toFixed(2)
   );

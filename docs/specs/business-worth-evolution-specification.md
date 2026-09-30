@@ -1379,3 +1379,40 @@ double-count the stock and is not part of this rule.
 **Frozen values.** Live figures correct themselves on the next calculation.
 Already-saved Closings and Contagem snapshots are immutable and keep the values
 they were saved with.
+
+
+---
+
+## Amendment — Purchase embedded profit accumulates; Quebra = selling value (Owner-approved, 2026-09-30)
+
+**Finding 2 (purchases).** Live Business Worth measured embedded-profit growth as
+`open-batch profit now − profit frozen at the snapshot`. Restocking a product
+closes that product's previous open batch (`addMultipleStockBatches`), so the
+closed batch's profit left the sum: buying the same product again before the
+next Contagem made live worth grow by only the *difference* between the new and
+old batch, or fall. Businesses that restock often were understated.
+
+**Rule.** Each purchase's embedded profit is added to live worth when the purchase
+is made and stays; closing a batch never removes it.
+
+```
+embedded profit gained since the latest Contagem =
+    Σ profit of every batch created AFTER it (open or closed, net of its Quebras)
+  − profit lost to Quebras recorded AFTER it on batches that already existed
+    (their remaining profit is already inside the counted value)
+```
+
+Case B (no snapshot yet) counts the embedded profit of all batches, open and closed.
+A batch with no usable `createdAt` (legacy `dateEntered` fallback, else none) is
+treated as already existing at the baseline — never guessed to be a new purchase.
+
+**Quebra, restated.** Net effect on live worth of a Quebra recorded after the
+Contagem is `quantityLost × sellingPrice` (per unit). Mechanically: the lost
+units' profit leaves the embedded-profit term, and their cost is subtracted by the
+Quebra-cost term above — together exactly `qty × selling price`.
+
+**Transaction effects on live worth (as now implemented).** +Stock adds the
+purchase's embedded profit (cost-neutral; a credit purchase is neutral at cost too);
+Owner Investment adds; customer payment received adds (an unpaid receivable adds
+nothing); Levantamento subtracts; Expense subtracts; Quebra subtracts qty × selling
+price. Paying a supplier for stock already counted does not subtract again.
