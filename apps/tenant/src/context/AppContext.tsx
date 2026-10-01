@@ -4365,7 +4365,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // redundant write for it. Never touches sellingPrice or
       // unitRelationship — those remain exclusively Periodic
       // Contagem's own write path (FR-85).
-      if (product && Number.isFinite(item.costPrice) && item.costPrice >= 0 && product.costPrice !== Number(item.costPrice)) {
+      // [Bug fix — "Missing or insufficient permissions" saving a purchase]
+      // Updating an EXISTING product's catalog cost is a catalog edit:
+      // firestore.rules allow it only to the owner or staff holding the
+      // catalog permission (ownerOrPerm 'catalog_act'). This update rides in
+      // the same all-or-nothing batch as the purchase, so for any other
+      // staff member a restock at a new cost price rejected the WHOLE
+      // purchase. Without that permission the catalog's default cost is
+      // simply left as it is; the purchase batch below still records its
+      // own costPrice, which is what stock value and profit use.
+      if (
+        product &&
+        can('catalog', 'act') &&
+        Number.isFinite(item.costPrice) &&
+        item.costPrice >= 0 &&
+        product.costPrice !== Number(item.costPrice)
+      ) {
         fsBatch.update(doc(db, 'businesses', businessId, 'products', product.id), {
           costPrice: Number(item.costPrice),
           updatedAt: new Date().toISOString(),
@@ -4548,7 +4563,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       fsBatch.delete(doc(db, 'businesses', businessId, 'purchaseDrafts', currentUser.uid));
     }
 
-    await fsBatch.commit();
+    try {
+      await fsBatch.commit();
+    } catch (err) {
+      // The whole purchase is one all-or-nothing write; a refused part
+      // refuses it all. Say so in plain Portuguese instead of Firestore's
+      // English "Missing or insufficient permissions".
+      if ((err as { code?: string })?.code === 'permission-denied') {
+        throw new Error(
+          isOwner
+            ? 'O sistema recusou guardar esta compra (permissão negada). Nada foi guardado. Verifique se a subscrição está ativa e tente novamente; se continuar, contacte o suporte SABUSH.'
+            : 'Não tem permissão para guardar esta compra. Nada foi guardado. Peça ao dono do negócio para verificar as suas permissões de "+ Stock".'
+        );
+      }
+      throw err;
+    }
 
     // [Bug fix — Owner-reported, urgent, live with a client: "confirming
     // add stocks delays... it takes time to confirm"] Root cause: this

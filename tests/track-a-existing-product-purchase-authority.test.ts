@@ -174,7 +174,12 @@ describe('Track A §C / R8-C — Product.costPrice: FR-86 forward maintenance un
   it('AppContext.tsx: the FR-86 forward-write block (current purchase cost -> Product.costPrice) is unmodified and present', () => {
     assert.match(
       appContextSrc,
-      /if \(product && Number\.isFinite\(item\.costPrice\) && item\.costPrice >= 0 && product\.costPrice !== Number\(item\.costPrice\)\) \{/
+      // [2026-09-30] FR-86 forward-write kept for whoever may edit the
+      // catalog (owner, or staff with catalog_act — exactly the products
+      // update rule). For other staff it used to reject the WHOLE purchase
+      // ("Missing or insufficient permissions"); the batch still records
+      // its own costPrice.
+      /if \(\s*product &&\s*can\('catalog', 'act'\) &&\s*Number\.isFinite\(item\.costPrice\) &&\s*item\.costPrice >= 0 &&\s*product\.costPrice !== Number\(item\.costPrice\)\s*\) \{/
     );
     assert.match(appContextSrc, /costPrice: Number\(item\.costPrice\),/);
   });

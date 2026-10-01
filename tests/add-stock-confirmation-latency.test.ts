@@ -62,8 +62,13 @@ describe('addMultipleStockBatches — the critical write returns to the caller i
   it('the critical fsBatch.commit() is immediately followed by a detached, non-awaited async block — not by an awaited loop', () => {
     const commitIdx = body.indexOf('await fsBatch.commit();');
     assert.notEqual(commitIdx, -1);
-    const after = body.slice(commitIdx, commitIdx + 2200);
+    // [2026-09-30] commit() is now wrapped in a try/catch that only turns a
+    // permission refusal into a Portuguese message; the detached block
+    // still follows directly after it.
+    const after = body.slice(commitIdx, commitIdx + 3600);
     assert.match(after, /\(async \(\) => \{/);
+    const between = after.slice(0, after.indexOf('(async () => {')).replace(/\/\/.*$/gm, '');
+    assert.doesNotMatch(between, /await (?!fsBatch\.commit)/, 'nothing awaited between the commit and the detached block');
     // The old, blocking shape directly after commit() must be gone —
     // the supplier-wording loop no longer appears un-detached right
     // after the commit.

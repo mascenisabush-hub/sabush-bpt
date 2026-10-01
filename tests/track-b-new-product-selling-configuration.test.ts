@@ -194,7 +194,7 @@ describe('Track B §E / FR-96, AC-11 — newProductSellingUnitPrice is never rea
   it('newProductSellingUnitPrice appears in AppContext.tsx ONLY within AddStockParams\' own declaration and the brand-new-product creation branch — never in the existing-product update branch', () => {
     const existingProductCostUpdateBranch = sliceBetween(
       appContextSrc,
-      'if (product && Number.isFinite(item.costPrice)',
+      "can('catalog', 'act') &&\n        Number.isFinite(item.costPrice)",
       'product.costPrice = Number(item.costPrice);\n      }'
     );
     assert.doesNotMatch(existingProductCostUpdateBranch, /newProductSellingUnitPrice/);
