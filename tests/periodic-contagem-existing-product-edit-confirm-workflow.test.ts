@@ -166,7 +166,10 @@ describe('E — Reopening and re-validating an existing product never creates a 
 describe('F — Validar with zero changes is safe (no duplicate, no altered value)', () => {
   it('validateWorkingRowForSave (the shared gate every Validar click passes through, reopened row or not) is completely unaffected by this workflow — no new bypass, no new special case for a reopened row', () => {
     const validateBody = extractFunctionBody(periodicSrc, 'const validateWorkingRowForSave = (row: StockCountWorkingRow): string | null => {');
-    assert.match(validateBody, /Introduza a quantidade contada/);
+    // [Validated ⇒ contributes] Quantity rules now live in the shared
+    // getTallyExclusion rule that Validar delegates to; still no bypass.
+    assert.match(validateBody, /getTallyExclusion\(row,/);
+    assert.match(src('apps/tenant/src/utils/stockCount.ts'), /Introduza a quantidade contada/);
   });
 
   it('the auto-clear-to-empty effect (fires once every visible row is validated) is untouched by this workflow — a reopened, then re-validated product returns the workspace to empty via the SAME pre-existing mechanism', () => {
@@ -206,7 +209,7 @@ describe('H — Existing portions are preserved and reopen together (Cebola: 4 s
   });
 
   it('the active-workspace manual-portion loop still filters out only VALIDATED portions at render time (group.rows.filter(...=> !manualRows[idx]?.validated)) — unmodified — so every portion this workflow just un-validated becomes visible together in the same card', () => {
-    assert.match(periodicSrc, /group\.rows\.filter\(\(\{ idx \}\) => !manualRows\[idx\]\?\.validated\)\.map\(\(\{ idx \}\) => \{/);
+    assert.match(periodicSrc, /group\.rows\.filter\(\(\{ idx \}\) => !effectiveManualRows\[idx\]\?\.validated\)\.map\(\(\{ idx \}\) => \{/);
   });
 
   it('groupRowsByProductName (the single existing grouping rule every portion view already shares) is not CALLED again inside this workflow — reopenExistingProductForEditing only mentions it in an explanatory comment, never invokes it as a second, competing grouping computation', () => {

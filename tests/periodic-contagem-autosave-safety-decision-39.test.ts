@@ -321,8 +321,12 @@ describe('G — Validar (formerly Guardar) now persists via the exact same per-r
 
   it('validateWorkingRowForSave and the zero-quantity confirmation gate are byte-for-byte unchanged by the rename (Decision 40 §2/this task item 1)', () => {
     const validateBody = extractFunctionBody(source, 'const validateWorkingRowForSave = (');
-    assert.match(validateBody, /Introduza a quantidade contada/);
-    assert.match(validateBody, /qty < 0/);
+    // [Validated ⇒ contributes] The quantity rules moved, unchanged, into
+    // the shared getTallyExclusion rule that Validar now delegates to.
+    assert.match(validateBody, /getTallyExclusion\(row,/);
+    const sharedRule = readFileSync(new URL('../apps/tenant/src/utils/stockCount.ts', import.meta.url), 'utf-8');
+    assert.match(sharedRule, /Introduza a quantidade contada/);
+    assert.match(sharedRule, /quantity < 0/);
     assert.match(source, /Confirmas que "\$\{row\.productName\}" tem mesmo 0 em stock\?/);
   });
 });

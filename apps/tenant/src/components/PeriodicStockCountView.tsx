@@ -5,7 +5,7 @@ import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatt
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { StockCount, StockCountItem, StockCountType, PeriodicStockDraft, PeriodicStockDraftItem, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
-import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyItem, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow, resolveSellingPricePerCountedUnit } from '../utils/stockCount';
+import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyItem, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow, resolveSellingPricePerCountedUnit, getTallyExclusion } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 // [Product Identity Existing/New Resolution — Implementation
 // Authorization, Checkpoint C] Reused, UNMODIFIED, exactly as
@@ -2962,43 +2962,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // blank row is never itself rejected here — it simply isn't "ready
   // to confirm" yet, distinct from "confirmed as wrong."
   const validateWorkingRowForSave = (row: StockCountWorkingRow): string | null => {
-    if (row.quantity.trim() === '') {
-      return 'Introduza a quantidade contada (ou 0, se não há stock deste produto).';
-    }
-    const qty = parseFloat(row.quantity);
-    if (!Number.isFinite(qty) || qty < 0) {
-      return 'Introduza uma quantidade válida (0 ou mais).';
-    }
-    // [§48 C — Product Architect Decision, Implementation Authorization
-    // §1a, docs/engineering/periodic-contagem-validation-live-total-
-    // persistence-safety-implementation-authorization.md] Unit is
-    // required for Contagem validation — a blank Unit is invalid.
-    // Exact message per the signed authorization. No enum/whitelist is
-    // introduced; any non-blank string remains acceptable, unchanged.
-    if (row.unit.trim() === '') {
-      return 'Introduza a unidade contada.';
+    // [Validated ⇒ contributes] The contribution rules (name, quantity,
+    // unit, selling price, price-unit conversion) come from the ONE
+    // shared rule the live total itself uses — getTallyExclusion — so a
+    // row Validar accepts is always a row the total counts. Order is
+    // unchanged: quantity → unit → cost price → selling price → conversion.
+    const exclusion = getTallyExclusion(row, getEffectiveUnitRelationshipForProductName(row.productName.trim()));
+    if (exclusion && exclusion.code !== 'removed' && ['name', 'quantity-blank', 'quantity-invalid', 'unit'].includes(exclusion.code)) {
+      return exclusion.message;
     }
     if (row.costPrice.trim() !== '') {
       const cost = parseFloat(row.costPrice);
       if (!Number.isFinite(cost) || cost < 0) return 'Introduza um preço de custo válido.';
     }
-    // [§48 D — Product Architect Decision, Implementation Authorization
-    // §1a] Selling Price is required and must be strictly positive —
-    // blank, zero, negative, and non-numeric are all invalid. This
-    // replaces the prior "only validated if non-blank" check, per the
-    // signed authorization's own explicit instruction not to
-    // reinterpret zero as a legitimate selling value for Periodic
-    // Contagem. Exact message per the signed authorization.
-    const sellingRaw = row.sellingPrice.trim();
-    const selling = sellingRaw === '' ? NaN : parseFloat(sellingRaw);
-    if (!Number.isFinite(selling) || selling <= 0) {
-      return 'Introduza um preço de venda válido, maior que zero.';
-    }
-    if (pricePerCountedUnitFor(row) === null) {
-      const basis = (row.sellingPriceBasisUnit ?? '').trim();
-      const counted = row.unit.trim();
-      return `O preço está por ${basis} mas a quantidade está em ${counted} — introduza o preço por ${counted}.`;
-    }
+    if (exclusion && exclusion.code !== 'removed') return exclusion.message;
     return null;
   };
 
@@ -5036,6 +5013,53 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     }
   };
 
+  // [Validated ⇒ contributes — Owner decision, 2026-10-28] A product is
+  // "validated" only while it can actually enter the live total. A row
+  // stored as validated that no longer can (an unconvertible price after
+  // a unit-relationship change, a draft saved under older rules, a
+  // blank name…) is shown and treated as NOT validated — listed in
+  // "Produtos por validar" with the action required — never as validated
+  // yet silently left out. Derived each render from the stored rows
+  // (getTallyExclusion, the same rule Validar and the tally use); the
+  // stored/persisted rows are never rewritten, so nothing is lost if the
+  // catalog is still loading. Identity is preserved when nothing changes.
+  const effectiveCatalogRows = useMemo<CatalogRowState>(() => {
+    let changed = false;
+    const next: CatalogRowState = {};
+    for (const [id, row] of Object.entries(catalogRows)) {
+      if (
+        row.validated &&
+        !row.removed &&
+        getTallyExclusion(row, getEffectiveUnitRelationshipForProductName(row.productName.trim()))
+      ) {
+        next[id] = { ...row, validated: false };
+        changed = true;
+      } else {
+        next[id] = row;
+      }
+    }
+    return changed ? next : catalogRows;
+    // getEffectiveUnitRelationshipForProductName reads newProductInfo and
+    // the catalog; both are listed so a relationship change re-evaluates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogRows, newProductInfo, products]);
+  const effectiveManualRows = useMemo<StockCountWorkingRow[]>(() => {
+    let changed = false;
+    const next = manualRows.map((row) => {
+      if (
+        row.validated &&
+        !row.removed &&
+        getTallyExclusion(row, getEffectiveUnitRelationshipForProductName(row.productName.trim()))
+      ) {
+        changed = true;
+        return { ...row, validated: false };
+      }
+      return row;
+    });
+    return changed ? next : manualRows;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualRows, newProductInfo, products]);
+
   // [Decision 40 — Validar Workflow, FR-N8; Implementation
   // Authorization §1 item 4] A validated row is excluded from the
   // active workspace by the SAME kind of filter `!row.removed` already
@@ -5057,11 +5081,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // comment for why this is safe.
   const pickerCatalogEntries = useMemo(() => {
     const search = productSearch.trim().toLowerCase();
-    return Object.entries(catalogRows)
+    return Object.entries(effectiveCatalogRows)
       .filter(([, row]) => !row.removed && !row.validated)
       .filter(([, row]) => !search || row.productName.toLowerCase().includes(search))
       .sort((a, b) => a[1].productName.localeCompare(b[1].productName));
-  }, [catalogRows, productSearch]);
+  }, [effectiveCatalogRows, productSearch]);
 
   const removedCatalogEntries = useMemo(
     () => Object.entries(catalogRows).filter(([, row]) => row.removed),
@@ -5076,8 +5100,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // `visibleCatalogEntries`'s own comment, immediately above) so a row
   // is never listed in both places at once.
   const validatedCatalogEntries = useMemo(
-    () => Object.entries(catalogRows).filter(([, row]) => row.validated && !row.removed),
-    [catalogRows]
+    () => Object.entries(effectiveCatalogRows).filter(([, row]) => row.validated && !row.removed),
+    [effectiveCatalogRows]
   );
 
   // [Implementation Authorization — Single-Product Workspace] Derives
@@ -5180,8 +5204,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // visibleManualRowGroups, below, and so a future catalog-row rename
     // affordance could not silently reintroduce the same class of bug.
     const catalogIdSet = new Set(activeWorkspaceRowIdentity.catalogIds);
-    return Object.entries(catalogRows).filter(([id, row]) => !row.removed && !row.validated && catalogIdSet.has(id));
-  }, [catalogRows, activeWorkspaceProductKey, activeWorkspaceRowIdentity]);
+    return Object.entries(effectiveCatalogRows).filter(([id, row]) => !row.removed && !row.validated && catalogIdSet.has(id));
+  }, [effectiveCatalogRows, activeWorkspaceProductKey, activeWorkspaceRowIdentity]);
 
   // The full working list — every catalog row (visible, removed,
   // validated, or still-blank alike) plus every manual row — is what
@@ -5195,8 +5219,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // review, and finalization even though it has left the active-
   // workspace view above.
   const allWorkingRows: StockCountWorkingRow[] = useMemo(
-    () => [...Object.values(catalogRows), ...manualRows],
-    [catalogRows, manualRows]
+    () => [...Object.values(effectiveCatalogRows), ...effectiveManualRows],
+    [effectiveCatalogRows, effectiveManualRows]
   );
 
   // [Business Worth Evolution — Increment 10 Item 5 / §25, FR-67]
@@ -5258,8 +5282,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     reason: string | null;
   };
   const pendingValidationEntries: PendingValidationEntry[] = [
-    ...Object.entries(catalogRows)
-      .filter(([, row]) => !row.removed && !row.validated && row.quantity.trim() !== '')
+    ...Object.entries(effectiveCatalogRows)
+      // Started = has a quantity, OR was stored as validated but no
+      // longer qualifies (e.g. its quantity is blank) — still listed,
+      // with the action required, never silently dropped.
+      .filter(
+        ([productId, row]) =>
+          !row.removed && !row.validated && (row.quantity.trim() !== '' || catalogRows[productId]?.validated === true)
+      )
       .map(([productId, row]) => ({
         rowKey: `catalog:${productId}`,
         productName: row.productName,
@@ -5267,9 +5297,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         catalogProductId: productId,
         reason: validateWorkingRowForSave(row) ?? duplicatePortionMessageFor(row, `catalog:${productId}`),
       })),
-    ...manualRows
+    ...effectiveManualRows
       .map((row, index) => ({ row, index }))
-      .filter(({ row }) => !row.removed && !row.validated && (row.productName.trim() !== '' || row.quantity.trim() !== ''))
+      .filter(
+        ({ row, index }) =>
+          !row.removed &&
+          !row.validated &&
+          (row.productName.trim() !== '' || row.quantity.trim() !== '' || manualRows[index]?.validated === true)
+      )
       .map(({ row, index }) => ({
         rowKey: row.sourceRowKey ?? `manual:${index}`,
         productName: row.productName,
@@ -5418,10 +5453,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // render site itself, below.
   const validatedManualRowEntries = useMemo(
     () =>
-      manualRows
+      effectiveManualRows
         .map((row, idx) => ({ idx, row }))
         .filter(({ row }) => row.validated && !row.removed),
-    [manualRows]
+    [effectiveManualRows]
   );
 
   // [Sorting — Authorization §8] The four supported modes, applied
@@ -5602,7 +5637,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const workspacePendingPortionCount =
     visibleCatalogEntries.filter(([, row]) => !row.validated).length +
     visibleManualRowGroups.reduce(
-      (sum, group) => sum + group.rows.filter(({ idx }) => manualRows[idx] && !manualRows[idx].validated).length,
+      (sum, group) => sum + group.rows.filter(({ idx }) => effectiveManualRows[idx] && !effectiveManualRows[idx].validated).length,
       0
     );
   const isMultiPortionWorkspace = workspacePendingPortionCount >= 2;
@@ -5631,8 +5666,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       ...visibleCatalogEntries.map(([productId, row]) => ({ row, conflictKey: `catalog:${productId}` })),
       ...visibleManualRowGroups.flatMap((group) =>
         group.rows.map((r) => ({
-          row: manualRows[r.idx],
-          conflictKey: manualRows[r.idx]?.sourceRowKey ?? `manual:${r.idx}`,
+          row: effectiveManualRows[r.idx],
+          conflictKey: effectiveManualRows[r.idx]?.sourceRowKey ?? `manual:${r.idx}`,
         }))
       ),
     ].filter((entry): entry is { row: StockCountWorkingRow; conflictKey: string } => entry.row !== undefined);
@@ -5659,7 +5694,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       setReopenedValidatedCatalogRowIds(null);
       setReopenedValidatedManualRowIndices(null);
     }
-  }, [isWorkspaceActive, visibleCatalogEntries, visibleManualRowGroups, manualRows]);
+  }, [isWorkspaceActive, visibleCatalogEntries, visibleManualRowGroups, effectiveManualRows]);
 
   // [Implementation Authorization — Single-Product Workspace] The
   // picker's own candidate lists — deliberately the search-filtered-
@@ -5695,11 +5730,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         (group) =>
           group.key !== '' &&
           group.rows.some((r) => {
-            const row = manualRows[r.idx];
+            const row = effectiveManualRows[r.idx];
             return row && !row.validated && !row.removed;
           })
       ),
-    [pickerManualRowGroupsRaw, manualRows]
+    [pickerManualRowGroupsRaw, effectiveManualRows]
   );
 
   const handleSelectExistingProductForWorkspace = (key: string, explicitProductId?: string) => {
@@ -5746,7 +5781,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // changes, exactly like `validatedCatalogEntries`/
   // `pickerCatalogEntries` already did individually.
   const unifiedListEntries = useMemo(() => {
-    const catalogEntries = Object.entries(catalogRows)
+    const catalogEntries = Object.entries(effectiveCatalogRows)
       .filter(([, row]) => !row.removed)
       .map(([productId, row]) => ({
         rowKey: `catalog-${productId}`,
@@ -5759,6 +5794,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         unit: row.unit,
         sellingPrice: row.sellingPrice,
         validated: row.validated === true,
+        // Stored as validated even if it no longer qualifies — keeps a
+        // started-but-excluded product listed (see effectiveCatalogRows).
+        storedValidated: catalogRows[productId]?.validated === true,
         entrySequence: row.entrySequence,
         activationKey: productKeyFor(row.productName),
         // [Bug fix — Product Architect correction, 5 September 2026:
@@ -5802,7 +5840,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         // position" handling for the 'original-order' mode.
         originalOrderIndex: correctionOriginalOrderRef.current[productId],
       }));
-    const manualEntries = manualRows
+    const manualEntries = effectiveManualRows
       .map((row, idx) => ({ row, idx }))
       .filter(({ row }) => !row.removed && row.productName.trim() !== '')
       .map(({ row, idx }) => ({
@@ -5824,6 +5862,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         unit: row.unit,
         sellingPrice: row.sellingPrice,
         validated: row.validated === true,
+        storedValidated: manualRows[idx]?.validated === true,
         entrySequence: row.entrySequence,
         activationKey: productKeyFor(row.productName),
         firstWriteAt:
@@ -5848,7 +5887,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         originalOrderIndex: undefined as number | undefined,
       }));
     return [...catalogEntries, ...manualEntries];
-  }, [catalogRows, manualRows, periodicStockDraftItemsByKey]);
+  }, [effectiveCatalogRows, effectiveManualRows, catalogRows, manualRows, periodicStockDraftItemsByKey]);
 
   // [Decision 60 §13.A item 10 — Working-Position Recovery] A pure
   // navigation lookup — resolves the persisted pointer to a currently-
@@ -6063,7 +6102,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const isGroupStarted = (group: ProductDisplayGroup): boolean =>
     group.members.some(
       (member) =>
-        member.validated || member.quantity.trim() !== '' || (member.kind === 'manual' && group.displayName.trim() !== '')
+        member.validated ||
+        member.storedValidated ||
+        member.quantity.trim() !== '' ||
+        (member.kind === 'manual' && group.displayName.trim() !== '')
     );
   const latestEntrySequence = (group: ProductDisplayGroup): number =>
     group.members.reduce((max, member) => Math.max(max, member.entrySequence ?? -1), -1);
@@ -7054,8 +7096,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     }
 
     const rowsForTally: StockCountWorkingRow[] = onlyValidatedCounts([
-      ...Object.values(catalogRows),
-      ...manualRows.map((row, idx) => ({ ...row, manualRowIndex: idx })),
+      ...Object.values(effectiveCatalogRows),
+      ...effectiveManualRows.map((row, idx) => ({ ...row, manualRowIndex: idx })),
     ]);
     const tally = tallyStockCountRows(rowsForTally, effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName);
     if (tally.unconvertiblePriceProductNames.length > 0) {
@@ -10641,8 +10683,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             list, below, driven by the separate
                             `validatedManualRowEntries` memo built from
                             the same, unmutated `manualRows`. */}
-                        {group.rows.filter(({ idx }) => !manualRows[idx]?.validated).map(({ idx }) => {
-                          const row = manualRows[idx];
+                        {group.rows.filter(({ idx }) => !effectiveManualRows[idx]?.validated).map(({ idx }) => {
+                          const row = effectiveManualRows[idx];
                           const portionLabel = portionLabels.get(`manual-${idx}`) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
                           // [Decision 40 — Validar Workflow] Read
                           // directly from the persisted row field —

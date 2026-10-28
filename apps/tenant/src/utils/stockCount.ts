@@ -481,6 +481,71 @@ export interface StockCountTallyItem {
   sellingPriceAutoFilled?: boolean;
 }
 
+// [Validated ⇒ contributes — Owner decision, 2026-10-28]
+// Why a row cannot enter the live total / the saved count, and what the
+// operator must do about it. This is the SINGLE rule: tallyStockCountRows
+// uses it to drop a row, Validar uses it to refuse validating, and the
+// screen uses it to treat a row as "por validar" (never "validated")
+// while it fails. A row is validated only if this returns null.
+export type TallyExclusionCode =
+  | 'name'
+  | 'removed'
+  | 'quantity-blank'
+  | 'quantity-invalid'
+  | 'unit'
+  | 'price'
+  | 'conversion';
+
+export interface TallyExclusion {
+  code: TallyExclusionCode;
+  // Imperative, operator-facing: the action required to make the row
+  // contribute.
+  message: string;
+}
+
+export function getTallyExclusion(
+  row: StockCountWorkingRow,
+  relationship?: UnitRelationship
+): TallyExclusion | null {
+  if (row.productName.trim() === '') {
+    return { code: 'name', message: 'Introduza o nome do produto.' };
+  }
+  if (row.removed === true) {
+    return { code: 'removed', message: 'Produto removido — restaure-o para o contar.' };
+  }
+  const rawQuantity = row.quantity.trim();
+  if (rawQuantity === '') {
+    return { code: 'quantity-blank', message: 'Introduza a quantidade contada (ou 0, se não há stock deste produto).' };
+  }
+  const quantity = Number(rawQuantity);
+  if (!Number.isFinite(quantity) || quantity < 0) {
+    return { code: 'quantity-invalid', message: 'Introduza uma quantidade válida (0 ou mais).' };
+  }
+  const rawUnit = row.unit.trim();
+  if (rawUnit === '') {
+    return { code: 'unit', message: 'Introduza a unidade contada.' };
+  }
+  const rawSellingPrice = row.sellingPrice.trim();
+  const sellingPrice = rawSellingPrice === '' ? NaN : Number(rawSellingPrice);
+  if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
+    return { code: 'price', message: 'Introduza um preço de venda válido, maior que zero.' };
+  }
+  const pricePerCountedUnit = resolveSellingPricePerCountedUnit(
+    rawUnit || 'un',
+    row.sellingPriceBasisUnit,
+    Number(row.sellingPrice) || 0,
+    relationship
+  );
+  if (pricePerCountedUnit === null) {
+    const basis = (row.sellingPriceBasisUnit ?? '').trim();
+    return {
+      code: 'conversion',
+      message: `O preço está por ${basis} mas a quantidade está em ${rawUnit} — introduza o preço por ${rawUnit}.`,
+    };
+  }
+  return null;
+}
+
 export interface StockCountTallyResult {
   countedItems: StockCountTallyItem[];
   notCountedProductNames: string[];
@@ -535,37 +600,17 @@ export function tallyStockCountRows(
     const trimmedName = row.productName.trim();
     if (!trimmedName) continue;
 
-    const rawQuantity = row.quantity.trim();
-    const parsedQuantity = rawQuantity === '' ? NaN : Number(rawQuantity);
-    const isBlank = row.removed === true || rawQuantity === '' || Number.isNaN(parsedQuantity);
-
-    if (isBlank) {
+    // [Validated ⇒ contributes] One shared rule decides whether a row
+    // can enter the totals — the same one Validar and the "por validar"
+    // list use (getTallyExclusion), so they can never disagree.
+    const exclusion = getTallyExclusion(row, relationshipForProductName?.(trimmedName));
+    if (exclusion) {
       notCountedProductNames.push(trimmedName);
+      if (exclusion.code === 'conversion') unconvertiblePriceProductNames.push(trimmedName);
       continue;
     }
 
-    // [§48 E — Product Architect Decision, Implementation Authorization
-    // §1c, docs/engineering/periodic-contagem-validation-live-total-
-    // persistence-safety-implementation-authorization.md] The live
-    // total must never silently substitute an invalid/missing Selling
-    // Price with zero, nor a missing Unit, and let the Owner proceed as
-    // though the product were correctly counted. Applies the identical
-    // validity check validateWorkingRowForSave already enforces at
-    // "Validar" time, the same way blank quantity is already excluded
-    // above -- not a new mechanism, an application of the one that
-    // already exists. The row itself is untouched and remains fully
-    // visible in the rendered list; this only governs the summed
-    // totals below.
-    const rawUnit = row.unit.trim();
-    const rawSellingPrice = row.sellingPrice.trim();
-    const parsedSellingPrice = rawSellingPrice === '' ? NaN : Number(rawSellingPrice);
-    const isIncomplete = rawUnit === '' || !Number.isFinite(parsedSellingPrice) || parsedSellingPrice <= 0;
-
-    if (isIncomplete) {
-      notCountedProductNames.push(trimmedName);
-      continue;
-    }
-
+    const parsedQuantity = Number(row.quantity.trim());
     const quantity = parsedQuantity;
     const unit = row.unit.trim() || 'un';
     const costPrice = Number(row.costPrice) || 0;

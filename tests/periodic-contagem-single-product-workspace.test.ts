@@ -335,10 +335,16 @@ describe('J — Existing valuation, UnitRelationship, and autosave behavior are 
       extractTopLevelExport(currentStockCountSrc, 'export function normalizeStockCountItems('),
       extractTopLevelExport(headStockCountSrc, 'export function normalizeStockCountItems(')
     );
-    assert.equal(
-      extractTopLevelExport(currentStockCountSrc, 'export function tallyStockCountRows('),
-      extractTopLevelExport(headStockCountSrc, 'export function tallyStockCountRows(')
-    );
+    // [Validated ⇒ contributes] The tally's row-exclusion checks moved
+    // into the shared getTallyExclusion rule; the VALUATION (everything
+    // from `const quantity = parsedQuantity;` on) must stay identical.
+    const valuationOf = (source: string): string => {
+      const fn = extractTopLevelExport(source, 'export function tallyStockCountRows(');
+      const at = fn.indexOf('const quantity = parsedQuantity;');
+      assert.notEqual(at, -1, 'Could not locate the valuation section of tallyStockCountRows');
+      return fn.slice(at);
+    };
+    assert.equal(valuationOf(currentStockCountSrc), valuationOf(headStockCountSrc));
   });
 
   it('lib/purchaseToSellingConversion.ts (getConversionFactor, UnitRelationship logic) is not in the changed-files list', () => {
@@ -487,7 +493,7 @@ describe('M — Existing (pre-Authorization) draft compatibility', () => {
 
   it('the picker (pickerCatalogEntries/pickerManualRowGroupsRaw) is derived from the SAME catalogRows/manualRows handleResumeDraft populates — an old draft with several unvalidated rows surfaces every one of them as a picker candidate, not just one', () => {
     const catalogBody = extractFunctionBody(periodicSrc, 'const pickerCatalogEntries = useMemo(() => {');
-    assert.match(catalogBody, /Object\.entries\(catalogRows\)/);
+    assert.match(catalogBody, /Object\.entries\(effectiveCatalogRows\)/);
     assert.match(catalogBody, /!row\.validated/);
     const manualBody = extractFunctionBody(periodicSrc, 'const pickerManualRowGroupsRaw = useMemo(() => {');
     assert.match(manualBody, /manualRowGroups/);
@@ -508,7 +514,7 @@ describe('M — Existing (pre-Authorization) draft compatibility', () => {
     const catalogBody = stripComments(extractFunctionBody(periodicSrc, 'const validatedCatalogEntries = useMemo('));
     assert.doesNotMatch(catalogBody, /activeWorkspaceKey|activeNewManualRowIndex/);
     const manualBody = stripComments(
-      extractFunctionBody(periodicSrc, 'const validatedManualRowEntries = useMemo(\n    () =>\n      manualRows')
+      extractFunctionBody(periodicSrc, 'const validatedManualRowEntries = useMemo(\n    () =>\n      effectiveManualRows')
     );
     assert.doesNotMatch(manualBody, /activeWorkspaceKey|activeNewManualRowIndex/);
   });

@@ -238,12 +238,12 @@ describe('Active-workspace filtering excludes validated rows WITHOUT removing th
 
   it('allWorkingRows is built ONLY from Object.values(catalogRows) and manualRows — no validated filter term anywhere in its definition', () => {
     const body = extractFunctionBody(source, 'const allWorkingRows: StockCountWorkingRow[] = useMemo(');
-    assert.match(body, /\[\.\.\.Object\.values\(catalogRows\), \.\.\.manualRows\]/);
+    assert.match(body, /\[\.\.\.Object\.values\(effectiveCatalogRows\), \.\.\.effectiveManualRows\]/);
     assert.doesNotMatch(body, /validated/);
   });
 
   it('the active manual-row render loop filters out validated portions at the render site, never by mutating manualRows itself', () => {
-    assert.match(source, /group\.rows\.filter\(\(\{ idx \}\) => !manualRows\[idx\]\?\.validated\)\.map\(\(\{ idx \}\) => \{/);
+    assert.match(source, /group\.rows\.filter\(\(\{ idx \}\) => !effectiveManualRows\[idx\]\?\.validated\)\.map\(\(\{ idx \}\) => \{/);
   });
 
   it('manualRowGroups (the grouping memo itself) is NOT filtered by validated status — only the individual portion render loop is', () => {
@@ -289,8 +289,8 @@ describe('Accumulated/validated area (Decision 40 FR-N8; Implementation Authoriz
     assert.match(source, /visibleProductDisplayGroups\.map\(/);
     assert.match(source, /buildProductDisplayGroups\(/);
     const entriesBody = extractFunctionBody(source, 'const unifiedListEntries = useMemo(() => {');
-    assert.match(entriesBody, /Object\.entries\(catalogRows\)/);
-    assert.match(entriesBody, /manualRows/);
+    assert.match(entriesBody, /Object\.entries\(effectiveCatalogRows\)/);
+    assert.match(entriesBody, /effectiveManualRows/);
     assert.doesNotMatch(entriesBody, /!row\.validated/, 'unifiedListEntries must not filter out validated rows — it is the superset, not the validated-only subset');
   });
 
@@ -382,7 +382,7 @@ describe('Corrigir (Decision 40 FR-N11; Implementation Authorization §1 item 7,
 
   it('handleRequestConfirmation tags manual rows with their own array index (rowsForTally), without modifying allWorkingRows itself', () => {
     const body = extractFunctionBody(source, 'const handleRequestConfirmation = async (e: React.FormEvent) => {');
-    assert.match(body, /manualRows\.map\(\(row, idx\) => \(\{ \.\.\.row, manualRowIndex: idx \}\)\)/);
+    assert.match(body, /effectiveManualRows\.map\(\(row, idx\) => \(\{ \.\.\.row, manualRowIndex: idx \}\)\)/);
     assert.match(body, /tallyStockCountRows\(rowsForTally, effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName\)/);
     // [Bug fix — per-product independent draft persistence] The
     // identity write immediately below no longer reads allWorkingRows
@@ -593,7 +593,11 @@ describe('Negative / out-of-scope proofs (Decision 40 amendment §4; Implementat
 
   it('validateWorkingRowForSave (the shared Validar/Guardar-era validation rule) is unchanged in its core conditions', () => {
     const body = extractFunctionBody(source, 'const validateWorkingRowForSave = (');
-    assert.match(body, /row\.quantity\.trim\(\) === ''/);
-    assert.match(body, /!Number\.isFinite\(qty\) \|\| qty < 0/);
+    // [Validated ⇒ contributes] The core conditions are unchanged, now
+    // living in the shared getTallyExclusion rule Validar delegates to.
+    assert.match(body, /getTallyExclusion\(row,/);
+    const sharedRule = readFileSync(new URL('../apps/tenant/src/utils/stockCount.ts', import.meta.url), 'utf-8');
+    assert.match(sharedRule, /rawQuantity === ''/);
+    assert.match(sharedRule, /!Number\.isFinite\(quantity\) \|\| quantity < 0/);
   });
 });

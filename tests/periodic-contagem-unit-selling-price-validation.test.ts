@@ -12,34 +12,50 @@ const componentSource = readFileSync(
   'utf8'
 );
 
+// [Validated ⇒ contributes] Name/quantity/unit/selling-price/conversion rules
+// now live in the shared getTallyExclusion (stockCount.ts); Validar delegates
+// to it. The cost-price check and the order remain in Validar itself.
+const sharedRuleSource = readFileSync(
+  new URL('../apps/tenant/src/utils/stockCount.ts', import.meta.url),
+  'utf8'
+);
+const sharedRuleMatch = sharedRuleSource.match(/export function getTallyExclusion\([\s\S]*?\n\}\n/);
+
 const fnMatch = componentSource.match(/const validateWorkingRowForSave = \(row: StockCountWorkingRow\): string \| null => \{[\s\S]*?\n  \};/);
 
 describe('validateWorkingRowForSave — Unit required (§48 C)', () => {
   it('exists and rejects a blank unit with the exact authorized message', () => {
     assert.ok(fnMatch, 'expected validateWorkingRowForSave to exist');
-    assert.match(fnMatch![0], /if \(row\.unit\.trim\(\) === ''\) \{\s*\n\s*return 'Introduza a unidade contada\.';\s*\n\s*\}/);
+    assert.ok(sharedRuleMatch, 'expected the shared getTallyExclusion rule to exist');
+    assert.match(fnMatch![0], /getTallyExclusion\(row,/);
+    assert.match(sharedRuleMatch![0], /if \(rawUnit === ''\) \{\s*\n\s*return \{ code: 'unit', message: 'Introduza a unidade contada\.' \};\s*\n\s*\}/);
   });
 
   it('the unit check does not introduce any enum/whitelist — any non-blank string remains acceptable', () => {
     assert.doesNotMatch(fnMatch![0], /row\.unit.*(includes|===\s*'(un|cx|emb)')/);
+    assert.doesNotMatch(sharedRuleMatch![0], /rawUnit.*(includes|===\s*'(un|cx|emb)')/);
   });
 
   it('the unit check runs after quantity, before cost/selling price, matching the function\'s own field order', () => {
+    // Shared rule: quantity → unit → selling price. Validar: the
+    // quantity/unit codes are returned before its own cost-price check.
+    const rule = sharedRuleMatch![0];
+    assert.ok(rule.indexOf("rawQuantity === ''") < rule.indexOf("rawUnit === ''"));
+    assert.ok(rule.indexOf("rawUnit === ''") < rule.indexOf('rawSellingPrice'));
     const body = fnMatch![0];
-    const qtyIdx = body.indexOf("row.quantity.trim() === ''");
-    const unitIdx = body.indexOf("row.unit.trim() === ''");
+    const unitCodeIdx = body.indexOf("'unit'");
     const costIdx = body.indexOf("row.costPrice.trim() !== ''");
-    assert.ok(qtyIdx < unitIdx && unitIdx < costIdx);
+    assert.ok(unitCodeIdx !== -1 && unitCodeIdx < costIdx);
   });
 });
 
 describe('validateWorkingRowForSave — Selling Price required and strictly positive (§48 D)', () => {
   it('rejects a blank selling price', () => {
-    const body = fnMatch![0];
-    assert.match(body, /const sellingRaw = row\.sellingPrice\.trim\(\);/);
-    assert.match(body, /const selling = sellingRaw === '' \? NaN : parseFloat\(sellingRaw\);/);
-    assert.match(body, /if \(!Number\.isFinite\(selling\) \|\| selling <= 0\) \{/);
-    assert.match(body, /return 'Introduza um preço de venda válido, maior que zero\.';/);
+    const body = sharedRuleMatch![0];
+    assert.match(body, /const rawSellingPrice = row\.sellingPrice\.trim\(\);/);
+    assert.match(body, /const sellingPrice = rawSellingPrice === '' \? NaN : Number\(rawSellingPrice\);/);
+    assert.match(body, /if \(!Number\.isFinite\(sellingPrice\) \|\| sellingPrice <= 0\) \{/);
+    assert.match(body, /message: 'Introduza um preço de venda válido, maior que zero\.'/);
   });
 
   it('the old "only validate if non-blank" pattern for selling price no longer exists', () => {

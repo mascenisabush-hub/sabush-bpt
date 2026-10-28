@@ -28,6 +28,10 @@ export interface GroupableUnifiedEntry extends IdentifiableGroupableRow {
   // plain quantity × sellingPrice applies (callers without unit context).
   sellingValue?: number | null;
   validated: boolean;
+  // [Validated ⇒ contributes] Stored as validated even though it no
+  // longer qualifies (shown as not validated) — keeps a started-but-
+  // excluded product listed. Optional: callers without it are unaffected.
+  storedValidated?: boolean;
   activationKey: string;
   isConflicted: boolean;
   persistenceState: PeriodicRowPersistenceState;
