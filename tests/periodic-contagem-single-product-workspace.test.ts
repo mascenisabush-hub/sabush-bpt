@@ -342,7 +342,16 @@ describe('J — Existing valuation, UnitRelationship, and autosave behavior are 
       const fn = extractTopLevelExport(source, 'export function tallyStockCountRows(');
       const at = fn.indexOf('const quantity = parsedQuantity;');
       assert.notEqual(at, -1, 'Could not locate the valuation section of tallyStockCountRows');
-      return fn.slice(at);
+      // Up to the end of the per-row loop; what follows (the not-counted
+      // / counted-product bookkeeping) is not valuation.
+      const endMarker = 'totalSellingValue += sellingValue;';
+      const end = fn.indexOf(endMarker, at);
+      assert.notEqual(end, -1, 'Could not locate the end of the valuation loop');
+      // The defensive "price unconvertible" guard only records the row as
+      // left out (bookkeeping, not valuation) — excluded from the compare.
+      return fn
+        .slice(at, end + endMarker.length)
+        .replace(/if \(pricePerCountedUnit === null\) \{[\s\S]*?\n    \}\n/, '');
     };
     assert.equal(valuationOf(currentStockCountSrc), valuationOf(headStockCountSrc));
   });

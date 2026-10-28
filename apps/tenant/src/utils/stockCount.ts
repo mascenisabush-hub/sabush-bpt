@@ -548,7 +548,14 @@ export function getTallyExclusion(
 
 export interface StockCountTallyResult {
   countedItems: StockCountTallyItem[];
+  // PRODUCTS (not rows) with nothing counted — de-duplicated, and never a
+  // product that has at least one counted portion (its untouched catalog
+  // twin is not "missing"). A row left out for being incomplete/invalid is
+  // always listed: its quantity is genuinely not in the total.
   notCountedProductNames: string[];
+  // Number of distinct products with at least one counted portion
+  // (countedItems.length counts portions, i.e. rows).
+  countedProductCount: number;
   // Rows with a quantity and a price whose price unit differs from the
   // counted unit with no known conversion — left out of every total
   // (also listed in notCountedProductNames) until the price is fixed.
@@ -590,7 +597,9 @@ export function tallyStockCountRows(
   relationshipForProductName?: (productName: string) => UnitRelationship | undefined
 ): StockCountTallyResult {
   const countedItems: StockCountTallyItem[] = [];
-  const notCountedProductNames: string[] = [];
+  // Rows left out, in order; resolved against the counted rows after the
+  // loop (see the end of this function).
+  const notCountedEntries: Array<{ name: string; coveredByCountedPortion: boolean }> = [];
   const unconvertiblePriceProductNames: string[] = [];
   let totalPhysicalUnits = 0;
   let totalPurchaseValue = 0;
@@ -605,7 +614,13 @@ export function tallyStockCountRows(
     // list use (getTallyExclusion), so they can never disagree.
     const exclusion = getTallyExclusion(row, relationshipForProductName?.(trimmedName));
     if (exclusion) {
-      notCountedProductNames.push(trimmedName);
+      notCountedEntries.push({
+        name: trimmedName,
+        // Only a row with NOTHING entered (blank quantity / removed) is
+        // just an untouched twin of a counted product; an incomplete or
+        // invalid row has a quantity that is NOT in the total.
+        coveredByCountedPortion: exclusion.code === 'quantity-blank' || exclusion.code === 'removed',
+      });
       if (exclusion.code === 'conversion') unconvertiblePriceProductNames.push(trimmedName);
       continue;
     }
@@ -630,7 +645,7 @@ export function tallyStockCountRows(
       relationshipForProductName?.(trimmedName)
     );
     if (pricePerCountedUnit === null) {
-      notCountedProductNames.push(trimmedName);
+      notCountedEntries.push({ name: trimmedName, coveredByCountedPortion: false });
       unconvertiblePriceProductNames.push(trimmedName);
       continue;
     }
@@ -673,8 +688,28 @@ export function tallyStockCountRows(
     totalSellingValue += sellingValue;
   }
 
+  // A product counts as counted when ANY of its portions is counted.
+  // Identity is the trimmed, case-insensitive product name — the same
+  // identity every portion view and exact-match productId assignment uses
+  // (a manual portion only gets a productId by an exact name match). Name
+  // only, deliberately: it never merges two differently named products.
+  const nameKey = (name: string) => name.trim().toLowerCase();
+  const countedNames = new Set<string>(countedItems.map((item) => nameKey(item.productName)));
+  const countedProductCount = countedNames.size;
+
+  const notCountedProductNames: string[] = [];
+  const seenNotCounted = new Set<string>();
+  for (const entry of notCountedEntries) {
+    const key = nameKey(entry.name);
+    if (entry.coveredByCountedPortion && countedNames.has(key)) continue;
+    if (seenNotCounted.has(key)) continue;
+    seenNotCounted.add(key);
+    notCountedProductNames.push(entry.name);
+  }
+
   return {
     countedItems,
+    countedProductCount,
     notCountedProductNames,
     unconvertiblePriceProductNames,
     totalPhysicalUnits: Number(totalPhysicalUnits.toFixed(2)),

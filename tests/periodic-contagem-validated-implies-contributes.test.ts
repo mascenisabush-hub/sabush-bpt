@@ -166,6 +166,79 @@ describe('parity — the tally counts a row exactly when the rule says it qualif
   });
 });
 
+describe('not-counted list — products, never a product that has a counted portion', () => {
+  const blank = (name: string, extra: Partial<StockCountWorkingRow> = {}) =>
+    row({ productName: name, quantity: '', validated: false, ...extra });
+
+  it('a product counted through a manual portion is not also "not counted" because its catalog row is blank', () => {
+    const result = tallyStockCountRows([
+      blank('Lucky star pek', { productId: 'p1' }),
+      row({ productName: 'Lucky star pek', productId: 'p1', quantity: '12' }),
+    ]);
+    assert.deepEqual(result.notCountedProductNames, []);
+    assert.equal(result.countedItems.length, 1);
+    assert.equal(result.totalSellingValue, 1800);
+  });
+
+  it('name matching ignores case and surrounding spaces', () => {
+    const result = tallyStockCountRows([blank('  ARIMA verde 25kg '), row({ productName: 'Arima Verde 25kg', quantity: '2' })]);
+    assert.deepEqual(result.notCountedProductNames, []);
+  });
+
+  it('a product with no counted portion is still listed — untouched or removed', () => {
+    const result = tallyStockCountRows([blank('ACUCAR 3KG'), blank('Baygon pek', { removed: true })]);
+    assert.deepEqual(result.notCountedProductNames, ['ACUCAR 3KG', 'Baygon pek']);
+    assert.equal(result.countedProductCount, 0);
+  });
+
+  it('a product with several blank rows is listed once', () => {
+    const result = tallyStockCountRows([blank('ACUCAR 3KG', { productId: 'a' }), blank('acucar 3kg'), blank('ACUCAR 3KG', { removed: true })]);
+    assert.deepEqual(result.notCountedProductNames, ['ACUCAR 3KG']);
+  });
+
+  it('a different product is never hidden by another counted product (even with a shared productId)', () => {
+    const result = tallyStockCountRows([
+      row({ productName: 'Coca-Cola', productId: 'p1', quantity: '20' }),
+      blank('Arroz', { productId: 'p1' }),
+    ]);
+    assert.deepEqual(result.notCountedProductNames, ['Arroz']);
+  });
+
+  it('a portion left out for being incomplete is ALWAYS listed — its quantity is not in the total', () => {
+    for (const bad of [{ sellingPrice: '0' }, { unit: '' }, { quantity: 'abc' }]) {
+      const result = tallyStockCountRows([row({ productName: 'Pretinha', quantity: '6' }), row({ productName: 'Pretinha', ...bad })]);
+      assert.deepEqual(result.notCountedProductNames, ['Pretinha'], JSON.stringify(bad));
+    }
+    const conv = tallyStockCountRows([
+      row({ productName: 'Pretinha', quantity: '6' }),
+      row({ productName: 'Pretinha', unit: 'un', sellingPriceBasisUnit: 'cx' }),
+    ]);
+    assert.deepEqual(conv.notCountedProductNames, ['Pretinha']);
+    assert.deepEqual(conv.unconvertiblePriceProductNames, ['Pretinha']);
+  });
+
+  it('countedProductCount counts products, not portions', () => {
+    const result = tallyStockCountRows([
+      row({ productName: 'Pretinha', quantity: '6' }),
+      row({ productName: 'pretinha', unit: 'un', quantity: '4' }),
+      row({ productName: 'Smol 2l', quantity: '26' }),
+    ]);
+    assert.equal(result.countedItems.length, 3);
+    assert.equal(result.countedProductCount, 2);
+  });
+
+  it('the review, receipt and summary counters read the product counts', () => {
+    const src = readFileSync(
+      new URL('../apps/tenant/src/components/PeriodicStockCountView.tsx', import.meta.url),
+      'utf8'
+    );
+    assert.match(src, /pendingTally\.countedProductCount/);
+    assert.match(src, /savedTally\.countedProductCount/);
+    assert.match(src, /liveTally\.countedProductCount/);
+    assert.doesNotMatch(src, /label: 'Produtos Contados', value: String\((saved|live)Tally\.countedItems\.length\)/);
+  });
+});
+
 const componentSource = readFileSync(
   new URL('../apps/tenant/src/components/PeriodicStockCountView.tsx', import.meta.url),
   'utf8'

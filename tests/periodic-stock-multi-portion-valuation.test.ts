@@ -104,7 +104,12 @@ describe('tallyStockCountRows — §17 canonical worked example (Pretinha), cata
     const result = tallyStockCountRows(rows);
     assert.equal(result.countedItems.length, 1);
     assert.equal(result.countedItems[0].purchaseValue, 4920);
-    assert.deepEqual(result.notCountedProductNames, ['Pretinha']); // the SAME product name also appears here — correct, since one portion genuinely wasn't counted
+    // [Not-counted accuracy, 2026-10-28] Portions stay independent (one counted item, the blank one adds
+    // nothing), but a product with a counted portion is NOT "not counted" — listing it told the operator
+    // a counted product was missing. A blank added portion cannot reach confirmation anyway (it is "por
+    // validar" until validated or removed).
+    assert.deepEqual(result.notCountedProductNames, []);
+    assert.equal(result.countedProductCount, 1);
   });
 });
 

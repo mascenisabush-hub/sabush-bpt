@@ -7794,7 +7794,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const kpis = [
       { label: 'Valor de Venda', value: formatCurrency(savedSellingTotal, currencySymbol) },
       { label: 'Valor Físico (Custo)', value: formatCurrency(savedTotal, currencySymbol) },
-      { label: 'Produtos Contados', value: String(savedTally.countedItems.length) },
+      { label: 'Produtos Contados', value: String(savedTally.countedProductCount) },
       ...(savedTally.notCountedProductNames.length > 0
         ? [{ label: 'Produtos Não Contados', value: String(savedTally.notCountedProductNames.length) }]
         : []),
@@ -7851,7 +7851,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const periodLabel = `${formatDate(date)}${label.trim() ? ` — ${label.trim()}` : ''}`;
     const kpis = [
       { label: 'Valor de Venda Contado até Agora', value: formatCurrency(liveTally.totalSellingValue, currencySymbol) },
-      { label: 'Produtos Contados', value: String(liveTally.countedItems.length) },
+      { label: 'Produtos Contados', value: String(liveTally.countedProductCount) },
       ...(liveTally.notCountedProductNames.length > 0
         ? [{ label: 'Produtos Não Contados', value: String(liveTally.notCountedProductNames.length) }]
         : []),
@@ -8025,7 +8025,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         </p>
         {savedTally && (
           <p className="text-xs text-gray-500">
-            {savedTally.countedItems.length} produtos contados
+            {savedTally.countedProductCount} produtos contados
             {savedTally.notCountedProductNames.length > 0
               ? ` · ${savedTally.notCountedProductNames.length} não contados`
               : ''}
@@ -8374,7 +8374,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5 text-center">
-              <p className="font-display font-semibold text-2xl text-emerald-700 tabular-nums">{pendingTally.countedItems.length}</p>
+              <p className="font-display font-semibold text-2xl text-emerald-700 tabular-nums">{pendingTally.countedProductCount}</p>
               <p className="text-[11px] font-semibold text-emerald-700/80 mt-0.5">Produtos Contados</p>
             </div>
             <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3.5 text-center">
