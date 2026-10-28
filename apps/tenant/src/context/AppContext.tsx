@@ -6152,12 +6152,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // `product` (found via tempProducts, including this run's own
       // earlier creations) already correctly satisfies the `!product`
       // half of this condition for those.
-      if (type !== 'initial' && products.length > 0 && !product && !confirmedNewProductByName.get(norm.productName.toLowerCase())) {
-        throw new Error(
-          `Unresolved product identity for "${norm.productName}": explicit Existing/New confirmation is required before this item can be saved.`
-        );
-      }
-
+      // [Owner decision, 2026-10-28] An unmatched name that was not resolved
+      // as an existing product is created as NEW — never refused.
       if (!product) {
         productId = newProductId();
         // [Product Memory / UOM — Increment A] Only ever reached for a

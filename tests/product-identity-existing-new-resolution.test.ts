@@ -66,15 +66,10 @@ describe('Requirement A — unresolved identity cannot silently create a Product
     );
   });
 
-  it('recordStockCount refuses to create a Product for Periodic Contagem with no existing match and no confirmedNewProductByName entry (Checkpoint C)', () => {
-    assert.match(
-      appContextSource,
-      /if\s*\(type !== 'initial' && products\.length > 0 && !product && !confirmedNewProductByName\.get\(norm\.productName\.toLowerCase\(\)\)\)\s*\{\s*\n\s*throw new Error/
-    );
-  });
-
-  it('recordStockCount\'s guard is scoped to type !== \'initial\' only — Initial Stock is explicitly out of this authorization\'s scope', () => {
-    assert.match(appContextSource, /type !== 'initial' && products\.length > 0 && !product && !confirmedNewProductByName/);
+  it('recordStockCount never refuses an unmatched Contagem name — unresolved identity defaults to NEW (Owner decision, 2026-10-28)', () => {
+    const rsc = appContextSource.slice(appContextSource.indexOf('const recordStockCount'), appContextSource.indexOf('const recordStockCount') + 25000);
+    assert.doesNotMatch(rsc, /Unresolved product identity for/);
+    assert.doesNotMatch(appContextSource, /type !== 'initial' && products\.length > 0 && !product && !confirmedNewProductByName/);
   });
 
   it('AddStockView.tsx re-checks identity resolution at handleSubmit (defensive re-check, never trusting render-level state alone)', () => {
@@ -100,18 +95,11 @@ describe('Requirement A — unresolved identity cannot silently create a Product
     );
   });
 
-  it('PeriodicStockCountView.tsx re-checks every counted item at handleConfirmSave before recordStockCount is ever called', () => {
-    assert.match(
+  it('PeriodicStockCountView.tsx no longer blocks handleConfirmSave on existing-vs-new (unresolved = new)', () => {
+    assert.doesNotMatch(
       periodicStockCountViewSource,
       /isGenuinelyNewProductName\(item\.productName\) && !isConfirmedNewProductName\(item\.productName\)/
     );
-    // The re-check must appear BEFORE the recordStockCount call, not after.
-    const guardIdx = periodicStockCountViewSource.indexOf(
-      'isGenuinelyNewProductName(item.productName) && !isConfirmedNewProductName('
-    );
-    const callIdx = periodicStockCountViewSource.indexOf('const saved = await recordStockCount({');
-    assert.ok(guardIdx > -1 && callIdx > -1);
-    assert.ok(guardIdx < callIdx, 'the resolution guard must run before recordStockCount is called');
   });
 });
 
@@ -193,11 +181,8 @@ describe('Requirement C — explicit New confirmation is the only thing that aut
     );
   });
 
-  it('Contagem forwards confirmedNewProduct to recordStockCount only when the item is actually confirmed (never unconditionally true)', () => {
-    assert.match(
-      periodicStockCountViewSource,
-      /\.\.\.\(isConfirmedNewProductName\(item\.productName\)\s*\n\s*\? \{ confirmedNewProduct: true \}\s*\n\s*: \{\}\)/
-    );
+  it('Contagem forwards confirmedNewProduct: true for every item — a name not resolved to an existing product is new', () => {
+    assert.match(periodicStockCountViewSource, /confirmedNewProduct: true,/);
   });
 });
 

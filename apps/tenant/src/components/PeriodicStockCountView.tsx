@@ -7474,15 +7474,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // (this Contagem's own confirmation, or any earlier one, having
     // created real Products), this defensive re-check resumes exactly
     // as before, unchanged.
-    if (type !== 'initial' && products.length > 0) {
-      const unresolvedItem = pendingTally.countedItems.find(
-        (item) => isGenuinelyNewProductName(item.productName) && !isConfirmedNewProductName(item.productName)
-      );
-      if (unresolvedItem) {
-        setError(`Confirme se "${unresolvedItem.productName}" é um produto existente ou um produto novo antes de continuar.`);
-        return;
-      }
-    }
+    // [Owner decision, 2026-10-28] Existing-vs-new never blocks confirmation.
+    // A counted name that matches no catalogue product and was not
+    // explicitly resolved as an existing one is simply treated as NEW
+    // (every item below is sent with confirmedNewProduct: true).
     setIsSaving(true);
     setError(null);
     try {
@@ -7690,9 +7685,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           // still harmlessly reflects manualIdentityConfirmedNew's
           // content either way, since recordStockCount itself never
           // reads this field for type === 'initial').
-          ...(isConfirmedNewProductName(item.productName)
-            ? { confirmedNewProduct: true }
-            : {}),
+          confirmedNewProduct: true,
           // [Implementation Authorization §14 item 6 — Reference
           // Selling Configuration as the Default Path] Moved from a
           // per-product-group flag (`modeAGroups` presence — which,
@@ -10560,7 +10553,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             <div className="bg-[#FFFBEA] border border-[#D4AF37]/40 rounded-xl px-3 py-2.5 space-y-2">
                               <p className="text-[13px] font-bold text-[#0B1F3A]">Produto ainda não confirmado</p>
                               <p className="text-[13px] text-[#8A6D1F] leading-snug">
-                                Este nome não corresponde exatamente a nenhum produto do catálogo. Escolha um produto já existente, ou confirme que é um produto novo.
+                                Este nome não corresponde exatamente a nenhum produto do catálogo e será registado como produto novo. Se na verdade é um produto já existente, escolha-o abaixo.
                               </p>
                               {candidates.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5">

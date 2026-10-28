@@ -15,12 +15,15 @@ test('empty catalog ⇒ every name is a confirmed new product; otherwise only ex
 test('the screen, the confirm gate and the saved items all use the same rule', () => {
   assert.match(view, /\{isNewProduct && !isConfirmedNewProductName\(group\.displayName\) && \(/, '"not confirmed" panel hidden');
   assert.match(view, /\{isNewProduct &&\s*isConfirmedNewProductName\(group\.displayName\) &&/, 'new-product details shown at once');
-  assert.match(view, /isGenuinelyNewProductName\(item\.productName\) && !isConfirmedNewProductName\(item\.productName\)/);
-  assert.match(view, /\.\.\.\(isConfirmedNewProductName\(item\.productName\)/);
+  // 2026-10-28: existing-vs-new no longer blocks — saved items are always sent as new-if-unmatched
+  assert.doesNotMatch(view, /isGenuinelyNewProductName\(item\.productName\) && !isConfirmedNewProductName\(item\.productName\)/);
+  assert.match(view, /confirmedNewProduct: true,/);
   // no stray direct checks left that could disagree
   assert.equal((view.match(/manualIdentityConfirmedNew\.has\(/g) ?? []).length, 1);
 });
 
-test('the save step already skips the identity check for an empty catalog', () => {
-  assert.match(ctx, /if \(type !== 'initial' && products\.length > 0 && !product && !confirmedNewProductByName\.get\(/);
+test('the save step never refuses an unmatched name — it is created as new', () => {
+  const start = ctx.indexOf('const recordStockCount');
+  assert.ok(start > -1);
+  assert.doesNotMatch(ctx.slice(start, start + 25000), /Unresolved product identity for/);
 });
