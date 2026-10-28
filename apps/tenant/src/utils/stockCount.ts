@@ -546,6 +546,18 @@ export function getTallyExclusion(
   return null;
 }
 
+// [Owner request, 2026-10-28] One entry per product listed as "not
+// counted", saying WHY (the exact getTallyExclusion rule that left it
+// out) and WHERE it lives (productId / manualRowIndex), so the review
+// screen can take the operator straight to fixing it, one by one.
+export interface NotCountedDetail {
+  name: string;
+  code: TallyExclusionCode;
+  message: string;
+  productId?: string;
+  manualRowIndex?: number;
+}
+
 export interface StockCountTallyResult {
   countedItems: StockCountTallyItem[];
   // PRODUCTS (not rows) with nothing counted — de-duplicated, and never a
@@ -553,6 +565,9 @@ export interface StockCountTallyResult {
   // twin is not "missing"). A row left out for being incomplete/invalid is
   // always listed: its quantity is genuinely not in the total.
   notCountedProductNames: string[];
+  // Same products as notCountedProductNames (same order), each with the
+  // reason it was left out and the row to open to fix it.
+  notCountedDetails: NotCountedDetail[];
   // Number of distinct products with at least one counted portion
   // (countedItems.length counts portions, i.e. rows).
   countedProductCount: number;
@@ -599,7 +614,7 @@ export function tallyStockCountRows(
   const countedItems: StockCountTallyItem[] = [];
   // Rows left out, in order; resolved against the counted rows after the
   // loop (see the end of this function).
-  const notCountedEntries: Array<{ name: string; coveredByCountedPortion: boolean }> = [];
+  const notCountedEntries: Array<{ name: string; coveredByCountedPortion: boolean; detail?: NotCountedDetail }> = [];
   const unconvertiblePriceProductNames: string[] = [];
   let totalPhysicalUnits = 0;
   let totalPurchaseValue = 0;
@@ -620,6 +635,13 @@ export function tallyStockCountRows(
         // just an untouched twin of a counted product; an incomplete or
         // invalid row has a quantity that is NOT in the total.
         coveredByCountedPortion: exclusion.code === 'quantity-blank' || exclusion.code === 'removed',
+        detail: {
+          name: trimmedName,
+          code: exclusion.code,
+          message: exclusion.message,
+          productId: row.productId,
+          manualRowIndex: row.manualRowIndex,
+        },
       });
       if (exclusion.code === 'conversion') unconvertiblePriceProductNames.push(trimmedName);
       continue;
@@ -698,19 +720,39 @@ export function tallyStockCountRows(
   const countedProductCount = countedNames.size;
 
   const notCountedProductNames: string[] = [];
+  const detailByKey = new Map<string, NotCountedDetail>();
   const seenNotCounted = new Set<string>();
   for (const entry of notCountedEntries) {
     const key = nameKey(entry.name);
     if (entry.coveredByCountedPortion && countedNames.has(key)) continue;
+    // A product with several left-out rows keeps the most informative
+    // reason: a real problem (price, unit, conversion…) beats a plain
+    // blank/removed row.
+    const existing = detailByKey.get(key);
+    if (entry.detail) {
+      const isPlain = (c: TallyExclusionCode) => c === 'quantity-blank' || c === 'removed';
+      if (!existing || (isPlain(existing.code) && !isPlain(entry.detail.code))) {
+        detailByKey.set(key, entry.detail);
+      }
+    }
     if (seenNotCounted.has(key)) continue;
     seenNotCounted.add(key);
     notCountedProductNames.push(entry.name);
   }
+  const notCountedDetails: NotCountedDetail[] = notCountedProductNames.map(
+    (name) =>
+      detailByKey.get(nameKey(name)) ?? {
+        name,
+        code: 'quantity-blank' as TallyExclusionCode,
+        message: 'Sem quantidade contada.',
+      }
+  );
 
   return {
     countedItems,
     countedProductCount,
     notCountedProductNames,
+    notCountedDetails,
     unconvertiblePriceProductNames,
     totalPhysicalUnits: Number(totalPhysicalUnits.toFixed(2)),
     totalPurchaseValue: Number(totalPurchaseValue.toFixed(2)),

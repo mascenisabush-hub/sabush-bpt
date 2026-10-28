@@ -5,7 +5,7 @@ import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatt
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { StockCount, StockCountItem, StockCountType, PeriodicStockDraft, PeriodicStockDraftItem, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
-import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyItem, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow, resolveSellingPricePerCountedUnit, getTallyExclusion } from '../utils/stockCount';
+import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyItem, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow, resolveSellingPricePerCountedUnit, getTallyExclusion, NotCountedDetail } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 // [Product Identity Existing/New Resolution — Implementation
 // Authorization, Checkpoint C] Reused, UNMODIFIED, exactly as
@@ -7211,6 +7211,64 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setCaixerStage('entry');
   };
 
+  // [Owner request, 2026-10-28] Resolve the "Não contados" one by one.
+  // From the review screen the operator opens the first product that
+  // was left out; after Validar (the workspace closes) the NEXT one
+  // opens by itself, and when the queue is empty the review screen
+  // comes back with the refreshed numbers. Nothing here changes what
+  // counts: it only navigates, using the existing workspace + Validar.
+  const [resolveQueue, setResolveQueue] = useState<NotCountedDetail[]>([]);
+  const [resolveSession, setResolveSession] = useState<{
+    total: number;
+    done: number;
+    current: NotCountedDetail;
+  } | null>(null);
+
+  const openResolveTarget = (detail: NotCountedDetail, rest: NotCountedDetail[], total: number, done: number) => {
+    setResolveQueue(rest);
+    setResolveSession({ total, done, current: detail });
+    handleSelectExistingProductForWorkspace(productKeyFor(detail.name), detail.productId);
+  };
+
+  const handleStartResolving = (from?: NotCountedDetail) => {
+    if (!pendingTally) return;
+    // A product the operator removed on purpose stays out; it is not a
+    // problem to "resolve" (it is shown on the review with its reason).
+    const all = pendingTally.notCountedDetails.filter((d) => d.code !== 'removed');
+    if (all.length === 0) return;
+    const ordered = from ? [from, ...all.filter((d) => d.name !== from.name)] : all;
+    const [first, ...rest] = ordered;
+    setPendingTally(null);
+    setCaixerStage(null);
+    openResolveTarget(first, rest, ordered.length, 1);
+  };
+
+  const handleStopResolving = () => {
+    setResolveQueue([]);
+    setResolveSession(null);
+    handleLeaveWorkspaceUnchanged();
+  };
+
+  useEffect(() => {
+    if (!resolveSession || isWorkspaceActive || pendingTally) return;
+    if (resolveQueue.length > 0) {
+      const [next, ...rest] = resolveQueue;
+      openResolveTarget(next, rest, resolveSession.total, resolveSession.done + 1);
+      return;
+    }
+    // Queue finished: back to the review, with the CAIXER step skipped
+    // when its four values are already filled in (caixerDraft is kept).
+    setResolveSession(null);
+    const caixerFilled = (['cash', 'emola', 'mpesa', 'banco'] as const).every((field) => {
+      const raw = caixerDraft[field];
+      return typeof raw === 'string' && raw.trim() !== '' && Number.isFinite(Number(raw));
+    });
+    void handleRequestConfirmation({ preventDefault: () => {} } as React.FormEvent).then(() => {
+      if (caixerFilled) setCaixerStage('review');
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolveSession, resolveQueue, isWorkspaceActive, pendingTally]);
+
   // Step 2 of 2: the operator has seen "N contados / M não contados"
   // and explicitly confirmed — now it actually saves.
   //
@@ -8407,17 +8465,46 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       <p className="text-[13px] leading-relaxed text-amber-900 mt-1.5">
                         <span className="font-semibold">Não contados:</span> {formatProductNames(names)}
                       </p>
-                      {names.length > 5 && (
-                        <details className="mt-1.5">
-                          <summary className="text-[12px] font-semibold text-amber-800 cursor-pointer select-none">
-                            Ver todos ({names.length})
-                          </summary>
-                          <ul className="mt-1.5 max-h-48 overflow-y-auto text-[12px] text-amber-900 list-disc pl-5 space-y-0.5">
-                            {names.map((name) => (
-                              <li key={name.trim().toLowerCase()}>{name.trim() || '(sem nome)'}</li>
+                      {pendingTally.notCountedDetails.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-[12px] font-semibold text-amber-900">Porque não foram contados:</p>
+                          <ul className="max-h-72 overflow-y-auto rounded-lg border border-amber-100 bg-white divide-y divide-amber-100">
+                            {pendingTally.notCountedDetails.map((detail) => (
+                              <li key={detail.name.trim().toLowerCase()} className="flex items-start justify-between gap-2 px-3 py-2">
+                                <div className="min-w-0">
+                                  <p className="text-[13px] font-semibold text-[#111827] truncate">{detail.name.trim() || '(sem nome)'}</p>
+                                  <p className="text-[12px] text-amber-900 leading-snug">
+                                    {detail.code === 'quantity-blank'
+                                      ? 'Nenhuma quantidade validada para este produto. Introduza a quantidade (ou 0, se não há stock) e valide.'
+                                      : detail.code === 'removed'
+                                        ? 'Removido da contagem. Fica de fora do total.'
+                                        : detail.message}
+                                  </p>
+                                </div>
+                                {detail.code !== 'removed' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartResolving(detail)}
+                                    disabled={isSaving}
+                                    className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold text-[#0B1F3A] bg-[#D4AF37]/20 hover:bg-[#D4AF37]/35 transition-colors duration-150 disabled:opacity-60 whitespace-nowrap"
+                                  >
+                                    Resolver
+                                  </button>
+                                )}
+                              </li>
                             ))}
                           </ul>
-                        </details>
+                          {pendingTally.notCountedDetails.some((d) => d.code !== 'removed') && (
+                            <button
+                              type="button"
+                              onClick={() => handleStartResolving()}
+                              disabled={isSaving}
+                              className="w-full py-2 rounded-lg text-[12px] font-bold text-white bg-[#0B1F3A] hover:bg-[#12315C] transition-colors duration-150 disabled:opacity-60"
+                            >
+                              Resolver um a um ({pendingTally.notCountedDetails.filter((d) => d.code !== 'removed').length})
+                            </button>
+                          )}
+                        </div>
                       )}
                     </>
                   );
@@ -9784,6 +9871,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               true — it returns to the counted list looking exactly as it
               did before it was opened, whether the Owner changed nothing
               or made an edit they still want kept. */}
+          {resolveSession && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 space-y-1">
+              <p className="text-[13px] font-bold text-amber-900">
+                A resolver produto {resolveSession.done} de {resolveSession.total}: {resolveSession.current.name}
+              </p>
+              <p className="text-[12px] text-amber-800">{resolveSession.current.message}</p>
+              <p className="text-[12px] text-amber-800">
+                Ao validar, passa automaticamente ao seguinte. “Voltar” salta este produto.
+              </p>
+              <button
+                type="button"
+                onClick={handleStopResolving}
+                className="text-[12px] font-bold text-amber-900 underline underline-offset-2"
+              >
+                Parar e sair desta lista
+              </button>
+            </div>
+          )}
           <button
             type="button"
             onClick={handleLeaveWorkspaceUnchanged}

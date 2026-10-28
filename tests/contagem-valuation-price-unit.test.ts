@@ -86,5 +86,7 @@ test('an unconvertible price blocks validation and confirmation, naming the prod
 
 test('review screen names the products not counted (#3)', () => {
   assert.match(view, /<span className="font-semibold">Não contados:<\/span> \{formatProductNames\(names\)\}/);
-  assert.match(view, /Ver todos \(\{names\.length\}\)/);
+  // The full list now shows each product with the reason it was left out and a "Resolver" action.
+  assert.match(view, /Porque não foram contados/);
+  assert.match(view, /notCountedDetails\.map\(\(detail\)/);
 });
