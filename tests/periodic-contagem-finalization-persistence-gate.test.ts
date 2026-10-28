@@ -27,7 +27,8 @@ describe('handleRequestConfirmation — third gate added, existing two gates unc
   it('the new gate reuses isRowSafeToProgress unchanged from Stage 2 -- no new persistence-state derivation introduced', () => {
     const fnStart = source.indexOf('const handleRequestConfirmation = async (e: React.FormEvent) => {');
     const region = source.slice(fnStart, fnStart + 7500); // widened from 3000: the identity-check retry and the duplicate gate now sit before this gate
-    assert.match(region, /\.filter\(\(conflictKey\) => !isRowSafeToProgress\(conflictKey\)\)/);
+    assert.match(region, /\.filter\(\(conflictKey\) => blocksFinalization\(conflictKey\)\)/);
+    assert.match(source, /const blocksFinalization = \(conflictKey: string\): boolean =>\s*\n\s*!isRowSafeToProgress\(conflictKey\) && !isNotPartOfThisCount\(conflictKey\);/);
   });
 
   it('checks every existing row (catalog and manual), using the same catalog:${id} / sourceRowKey ?? manual:${index} pattern used everywhere else in this file', () => {
@@ -42,7 +43,7 @@ describe('handleConfirmSave — belt-and-suspenders re-check, matching the exist
   it('the gate is present and re-checked here; it reports via setError (was a silent bare return -- a dead Confirm button, see periodic-contagem-confirm-gate-messages.test.ts)', () => {
     const fnStart = source.indexOf('const handleConfirmSave = async () => {');
     const region = source.slice(fnStart, fnStart + 4000);
-    assert.match(region, /const unsafeRowCount = \[[\s\S]*?\]\.filter\(\(conflictKey\) => !isRowSafeToProgress\(conflictKey\)\)\.length;\s*\n\s*if \(unsafeRowCount > 0\) \{\s*\n\s*setError\(unsafeRowsMessage\(unsafeRowCount, unsafeRowProductNames\(\)\)\);\s*\n\s*return;/);
+    assert.match(region, /const unsafeRowCount = \[[\s\S]*?\]\.filter\(\(conflictKey\) => blocksFinalization\(conflictKey\)\)\.length;\s*\n\s*if \(unsafeRowCount > 0\) \{\s*\n\s*setError\(unsafeRowsMessage\(unsafeRowCount, unsafeRowProductNames\(\)\)\);\s*\n\s*return;/);
   });
 
   it('comes after the two existing gates here too, in the same order', () => {

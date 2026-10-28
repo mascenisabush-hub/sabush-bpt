@@ -47,7 +47,7 @@ test('NO-DATA-LOSS: pending rows still flush when the page is hidden/closed, and
   for (const marker of ['const handleRequestConfirmation = async', 'const handleConfirmSave = async () => {']) {
     const body = fnBody(view, marker);
     const flush = body.indexOf('if (rowDebounceTimersRef.current.size > 0) flushPeriodicDraftNow();');
-    const gate = body.indexOf('!isRowSafeToProgress(conflictKey)');
+    const gate = body.indexOf('blocksFinalization(conflictKey)');
     assert.ok(flush > 0 && gate > flush, `${marker}: flush before the unchanged safety gate`);
   }
 });

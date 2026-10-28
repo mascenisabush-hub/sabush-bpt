@@ -1271,7 +1271,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       ...Object.keys(catalogRows).map((productId) => `catalog:${productId}`),
       ...manualRows.map((row, idx) => row.sourceRowKey ?? `manual:${idx}`),
     ]
-      .filter((conflictKey) => !isRowSafeToProgress(conflictKey))
+      .filter((conflictKey) => blocksFinalization(conflictKey))
       .map(productNameForRowKey);
 
   const handleDiscardRecoveryEvidence = (rowKeys: string[]) => {
@@ -5949,6 +5949,25 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return persistenceState === 'saved' || persistenceState === 'saving';
   };
 
+  // [Owner decision, 2026-10-28] A catalogue product that is NOT part of
+  // this Contagem (nothing counted, nothing validated) must never block
+  // finalization: after the first Contagem the catalogue lists every
+  // product, but a later count need not include all of them (sold out,
+  // no longer sold, ...). Such products are only LISTED, as "Não
+  // contados", on the review screen. A row with a genuine server
+  // CONFLICT still blocks (data-integrity, and firestore.rules enforces
+  // openConflictCount == 0 regardless).
+  const isNotPartOfThisCount = (conflictKey: string): boolean => {
+    if (!conflictKey.startsWith('catalog:')) return false;
+    const row = catalogRows[conflictKey.slice('catalog:'.length)];
+    if (!row || row.removed || row.validated) return false;
+    if (row.quantity.trim() !== '') return false;
+    return periodicStockDraftItemsByKey[conflictKey]?.state !== 'CONFLICT';
+  };
+  // The ONE filter every finalization gate uses.
+  const blocksFinalization = (conflictKey: string): boolean =>
+    !isRowSafeToProgress(conflictKey) && !isNotPartOfThisCount(conflictKey);
+
   const groupableUnifiedEntries = useMemo(
     () =>
       unifiedListEntries.map((entry) => {
@@ -7040,7 +7059,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const unsafeRowEntries = [
       ...Object.entries(catalogRows).map(([productId]) => `catalog:${productId}`),
       ...manualRows.map((row, idx) => row.sourceRowKey ?? `manual:${idx}`),
-    ].filter((conflictKey) => !isRowSafeToProgress(conflictKey));
+    ].filter((conflictKey) => blocksFinalization(conflictKey));
     if (unsafeRowEntries.length > 0) {
       setError(
         unsafeRowsMessage(unsafeRowEntries.length, unsafeRowEntries.map(productNameForRowKey))
@@ -7425,7 +7444,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const unsafeRowCount = [
       ...Object.entries(catalogRows).map(([productId]) => `catalog:${productId}`),
       ...manualRows.map((row, idx) => row.sourceRowKey ?? `manual:${idx}`),
-    ].filter((conflictKey) => !isRowSafeToProgress(conflictKey)).length;
+    ].filter((conflictKey) => blocksFinalization(conflictKey)).length;
     if (unsafeRowCount > 0) {
       setError(unsafeRowsMessage(unsafeRowCount, unsafeRowProductNames()));
       return;
