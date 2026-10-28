@@ -8,6 +8,7 @@ import {
   tallyStockCountRows,
   normalizeStockCountItems,
   resolveSellingPricePerCountedUnit,
+  getTallyExclusion,
   type StockCountWorkingRow,
 } from '../apps/tenant/src/utils/stockCount';
 import type { UnitRelationship } from '../apps/tenant/src/types';
@@ -80,7 +81,15 @@ test('every figure on the Contagem screen uses the same rule', () => {
 });
 
 test('an unconvertible price blocks validation and confirmation, naming the product', () => {
-  assert.match(view, /if \(pricePerCountedUnitFor\(row\) === null\) \{[\s\S]{0,300}introduza o preço por \$\{counted\}/);
+  // The conversion guard now lives in the ONE shared rule (getTallyExclusion), which the live
+  // total and Validar both use, so a row Validar accepts is always a row the total counts.
+  const exclusion = getTallyExclusion(row({ sellingPriceBasisUnit: 'Kg' }), cxUn);
+  assert.equal(exclusion?.code, 'conversion');
+  assert.match(exclusion?.message ?? '', /introduza o preço por Un/);
+  assert.equal(getTallyExclusion(row({ sellingPriceBasisUnit: 'Cx' }), cxUn), null);
+  // ...and Validar surfaces that exclusion instead of re-implementing it.
+  assert.match(view, /const exclusion = getTallyExclusion\(row, getEffectiveUnitRelationshipForProductName\(row\.productName\.trim\(\)\)\);/);
+  assert.match(view, /if \(exclusion && exclusion\.code !== 'removed'\) return exclusion\.message;/);
   assert.match(view, /if \(tally\.unconvertiblePriceProductNames\.length > 0\) \{\s*setError\(/);
 });
 
